@@ -1,0 +1,7 @@
+<Solution>
+  <Project Path="TransitGate.Api/TransitGate.Api.csproj" />
+  <Project Path="TransitGate.Application/TransitGate.Application.csproj" />
+  <Project Path="TransitGate.Domain.Tests/TransitGate.Domain.Tests.csproj" />
+  <Project Path="TransitGate.Domain/TransitGate.Domain.csproj" />
+  <Project Path="TransitGate.Infrastructure/TransitGate.Infrastructure.csproj" />
+</Solution>
