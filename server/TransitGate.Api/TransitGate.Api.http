@@ -1,6 +1,43 @@
-@TransitGate.Api_HostAddress = http://localhost:5013
+@host = http://localhost:5000
+@tq = tq_1
 
-GET {{TransitGate.Api_HostAddress}}/weatherforecast/
-Accept: application/json
+GET {{host}}/api/salud
 
 ###
+# Lectura que abre. Si repites el mismo lecturaId recibes la misma respuesta (RF-18 CA4).
+POST {{host}}/api/torniquetes/{{tq}}/lecturas
+Content-Type: application/json
+
+{ "lecturaId": "a1f3-{{$randomInt 1000 9999}}", "tipo": "uid", "valor": "04A1B2C3" }
+
+###
+# Lectura rechazada: UID de prueba con saldo insuficiente
+POST {{host}}/api/torniquetes/{{tq}}/lecturas
+Content-Type: application/json
+
+{ "lecturaId": "a1f3-{{$randomInt 1000 9999}}", "tipo": "uid", "valor": "DEADBEEF" }
+
+###
+# Latido del ESP32: devuelve el estado deseado
+POST {{host}}/api/torniquetes/{{tq}}/latido
+Content-Type: application/json
+
+{ "brazoReal": "cerrado", "sirenaReal": false, "pasoIdAbierto": null, "arranque": "a1f3", "fw": "0.1.0" }
+
+###
+# Cruce de entrada con la hora actual: consume el paso si hay uno pendiente; si no, es fraude
+POST {{host}}/api/torniquetes/{{tq}}/cruces
+Content-Type: application/json
+
+{ "trackId": {{$randomInt 1 1000000}}, "sesionVision": "v-prueba", "sentido": "entrada", "horaFotograma": "{{$datetime iso8601}}" }
+
+###
+# Latido del servicio de visión
+POST {{host}}/api/torniquetes/{{tq}}/vision/latido
+Content-Type: application/json
+
+{ "fps": 14.8, "sesionVision": "v-prueba" }
+
+###
+# Apagar la alarma (el id sale de la respuesta "fraude")
+POST {{host}}/api/alertas/al_1/apagar-alarma
