@@ -2,6 +2,8 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http.HttpResults;
 using TransitGate.Api.Contratos;
 using TransitGate.Api.Esqueleto;
+using TransitGate.Application.Torniquetes;
+using TransitGate.Application.Validacion;
 using TransitGate.Domain.Torniquetes;
 
 namespace TransitGate.Api.Endpoints;
@@ -16,7 +18,7 @@ public static partial class DispositivosEndpoints
     {
         var esp32 = app.MapGroup("/api/torniquetes/{id}").WithTags("ESP32");
         esp32.MapPost("/lecturas", RecibirLectura)
-            .WithSummary("Lectura de una tarjeta física (RF-18, RF-20, RF-22)");
+            .WithSummary("Lectura de una tarjeta física (RF-18, RF-20, RF-21, RF-22)");
         esp32.MapPost("/latido", Latido)
             .WithSummary("Latido cada 300 ms: devuelve el estado deseado (RF-45)");
 
@@ -33,11 +35,9 @@ public static partial class DispositivosEndpoints
         return app;
     }
 
-    private static Results<Ok<RespuestaLectura>, BadRequest<ErrorApi>, NotFound<ErrorApi>> RecibirLectura(
-        string id, SolicitudLectura lectura, EstacionEnMemoria estacion)
+    private static async Task<Results<Ok<RespuestaLectura>, BadRequest<ErrorApi>, NotFound<ErrorApi>>> RecibirLectura(
+        string id, SolicitudLectura lectura, ValidarLectura validarLectura, CancellationToken ct)
     {
-        if (!estacion.Existe(id))
-            return TorniqueteNoRegistrado(id);
         if (string.IsNullOrWhiteSpace(lectura.LecturaId))
             return Invalido("LecturaIdRequerido", "Falta el lecturaId.");
         if (lectura.Tipo != "uid")
@@ -45,27 +45,31 @@ public static partial class DispositivosEndpoints
         if (lectura.Valor is null || !UidHex().IsMatch(lectura.Valor))
             return Invalido("UidInvalido", "El UID va en hexadecimal mayúsculas, con 8 o 14 caracteres (RNF-35).");
 
-        return TypedResults.Ok(estacion.RecibirLectura(id, lectura.LecturaId, lectura.Valor));
+        var resultado = await validarLectura.EjecutarAsync(id, lectura.LecturaId, lectura.Valor, ct);
+        if (resultado is null)
+            return TorniqueteNoRegistrado(id);
+
+        return TypedResults.Ok(RespuestaLectura.Desde(resultado));
     }
 
-    private static Results<Ok<RespuestaLatido>, BadRequest<ErrorApi>, NotFound<ErrorApi>> Latido(
-        string id, SolicitudLatido latido, EstacionEnMemoria estacion)
+    private static async Task<Results<Ok<RespuestaLatido>, BadRequest<ErrorApi>, NotFound<ErrorApi>>> Latido(
+        string id, SolicitudLatido latido, EstacionEnMemoria estacion, CancellationToken ct)
     {
-        if (!estacion.Existe(id))
-            return TorniqueteNoRegistrado(id);
         if (latido.BrazoReal is not ("abierto" or "cerrado"))
             return Invalido("BrazoRealInvalido", "brazoReal debe ser \"abierto\" o \"cerrado\".");
         if (latido.SirenaReal is null || string.IsNullOrWhiteSpace(latido.Arranque))
             return Invalido("LatidoIncompleto", "Faltan sirenaReal o arranque.");
 
-        return TypedResults.Ok(estacion.Latido(id));
+        var respuesta = await estacion.LatidoAsync(id, ct);
+        if (respuesta is null)
+            return TorniqueteNoRegistrado(id);
+
+        return TypedResults.Ok(respuesta);
     }
 
-    private static Results<Ok<RespuestaCruce>, BadRequest<ErrorApi>, NotFound<ErrorApi>> RegistrarCruce(
-        string id, SolicitudCruce cruce, EstacionEnMemoria estacion)
+    private static async Task<Results<Ok<RespuestaCruce>, BadRequest<ErrorApi>, NotFound<ErrorApi>>> RegistrarCruce(
+        string id, SolicitudCruce cruce, EstacionEnMemoria estacion, CancellationToken ct)
     {
-        if (!estacion.Existe(id))
-            return TorniqueteNoRegistrado(id);
         if (cruce.TrackId is not { } trackId || string.IsNullOrWhiteSpace(cruce.SesionVision))
             return Invalido("CruceIncompleto", "Faltan trackId o sesionVision.");
 
@@ -80,24 +84,29 @@ public static partial class DispositivosEndpoints
         if (cruce.HoraFotograma is not { Kind: DateTimeKind.Utc } horaFotograma)
             return Invalido("HoraFotogramaInvalida", "horaFotograma va en UTC, en ISO-8601 terminado en Z.");
 
-        return TypedResults.Ok(estacion.RegistrarCruce(id, cruce.SesionVision, trackId, sentido.Value, horaFotograma));
+        var respuesta = await estacion.RegistrarCruceAsync(id, cruce.SesionVision, trackId, sentido.Value, horaFotograma, ct);
+        if (respuesta is null)
+            return TorniqueteNoRegistrado(id);
+
+        return TypedResults.Ok(respuesta);
     }
 
-    private static Results<NoContent, BadRequest<ErrorApi>, NotFound<ErrorApi>> LatidoVision(
-        string id, SolicitudLatidoVision latido, EstacionEnMemoria estacion)
+    private static async Task<Results<NoContent, BadRequest<ErrorApi>, NotFound<ErrorApi>>> LatidoVision(
+        string id, SolicitudLatidoVision latido, ITorniqueteRepositorio torniquetes, CancellationToken ct)
     {
-        if (!estacion.Existe(id))
-            return TorniqueteNoRegistrado(id);
         if (latido.Fps is null || string.IsNullOrWhiteSpace(latido.SesionVision))
             return Invalido("LatidoIncompleto", "Faltan fps o sesionVision.");
+        if (await torniquetes.ObtenerAsync(id, ct) is null)
+            return TorniqueteNoRegistrado(id);
 
-        // La conexión de la visión (S14, RF-30) se empieza a llevar en la semana 2.
+        // La conexión de la visión (S14, RF-30) se empieza a llevar con el latido real.
         return TypedResults.NoContent();
     }
 
-    private static Results<Ok, NotFound<ErrorApi>> ApagarAlarma(string id, EstacionEnMemoria estacion)
+    private static async Task<Results<Ok, NotFound<ErrorApi>>> ApagarAlarma(
+        string id, EstacionEnMemoria estacion, CancellationToken ct)
     {
-        if (!estacion.ApagarAlarma(id))
+        if (!await estacion.ApagarAlarmaAsync(id, ct))
             return TypedResults.NotFound(new ErrorApi("AlertaNoEncontrada", $"No existe la alerta {id}."));
 
         return TypedResults.Ok();
