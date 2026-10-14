@@ -1,8 +1,9 @@
-using Microsoft.Extensions.Options;
 using Scalar.AspNetCore;
 using TransitGate.Api;
 using TransitGate.Api.Endpoints;
 using TransitGate.Api.Esqueleto;
+using TransitGate.Api.TiempoReal;
+using TransitGate.Application.Notificaciones;
 using TransitGate.Application.Torniquetes;
 using TransitGate.Application.Validacion;
 
@@ -17,15 +18,18 @@ builder.Logging.AddSimpleConsole(opciones =>
 });
 
 builder.Services.AddOpenApi();
+builder.Services.AddSignalR();
 builder.Services.Configure<OpcionesOperacion>(builder.Configuration.GetSection(OpcionesOperacion.Seccion));
-builder.Services.AddTransient<IParametrosOperacion>(sp =>
-    sp.GetRequiredService<IOptionsMonitor<OpcionesOperacion>>().CurrentValue);
+builder.Services.AddSingleton<IParametrosOperacion, ParametrosDesdeConfiguracion>();
 builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<CerrojoTorniquetes>();
 builder.Services.AddSingleton<BitacoraTorniquete>();
 builder.Services.AddScoped<ValidarLectura>();
 builder.Services.AddScoped<ProcesarLatido>();
 builder.Services.AddScoped<ConsultarTorniquetes>();
+builder.Services.AddSingleton<INotificador, NotificadorSignalR>();
+builder.Services.AddSingleton<MonitorTorniquetes>();
+builder.Services.AddHostedService<ServicioMonitorTorniquetes>();
 builder.Services.AddEsqueletoEnMemoria(builder.Configuration);
 
 var app = builder.Build();
@@ -37,5 +41,6 @@ app.MapGet("/api/salud", () => Results.Ok(new { estado = "ok", hora = DateTime.U
     .WithTags("Diagnóstico");
 
 app.MapDispositivos();
+app.MapHub<EventosHub>(EventosHub.Ruta);
 
 app.Run();

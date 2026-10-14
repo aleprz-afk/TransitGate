@@ -1,6 +1,6 @@
 # Cambios del servidor: validación y torniquete
 
-Responsable: Alex · Última actualización: 13 de octubre de 2026 · Rama: `feat/rf-20-validacion`
+Responsable: Alex · Última actualización: 13 de octubre de 2026 · Ramas: `feat/rf-20-validacion` (PR #2) y `feat/signalr-estado-torniquete`
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -11,8 +11,9 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - La lectura valida torniquete, soporte y saldo en el orden de RF-20, debita la tarifa (3.200) y abre un paso.
 - El latido devuelve el estado deseado, registra la señal de vida y confirma la apertura del brazo.
 - Los cruces consumen el paso, detectan colados y activan la alarma.
+- El hub de SignalR `/hubs/eventos` envía `EstadoTorniquete` en vivo: estado, conexión del ESP32 y de la visión, y desincronización.
 - Todo vive en memoria hasta que esté la base de datos: **al reiniciar la API se pierde el estado**.
-- Hay 44 pruebas automatizadas (dominio y casos de uso), una por criterio de aceptación.
+- Hay 52 pruebas automatizadas (dominio y casos de uso), una por criterio de aceptación.
 
 ## Qué necesita saber cada uno
 
@@ -28,6 +29,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
   - Cuando el brazo abre para un paso, manda su id en `pasoIdAbierto` en el siguiente latido; así el servidor sabe que abrió (base de RF-46).
   - Genera un `arranque` nuevo en cada reinicio: el servidor deja registrado cada reinicio en el log.
   - Tras 5 s sin latidos, el torniquete figura **sin conexión**.
+  - `brazoReal` y `sirenaReal` deben ser lo que el ESP32 aplicó de verdad: si no coinciden con lo deseado durante más de 2 s, el panel marca el torniquete como **desincronizado** (RF-45 CA4).
 - **Credencial:** `X-Device-Key` todavía no se exige, pero conviene enviarla desde ya; se activa cuando los torniquetes estén en la base de datos.
 - **Tarjetas de prueba** (tarifa 3.200):
 
@@ -46,16 +48,32 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
   - El mismo `sesionVision` + `trackId` reportado dos veces responde `duplicado`.
   - Un cruce de `salida` responde `registrado`: no consume pasos ni es fraude.
   - Un cruce de entrada consume el paso si su fotograma cae dentro de los 10 s de la ventana. Sin paso disponible, responde `fraude` con un `alertaId`.
-- **Latido** `POST /api/torniquetes/tq_1/vision/latido` cada 5 s, con `fps` y `sesionVision`.
+- **Latido** `POST /api/torniquetes/tq_1/vision/latido` cada 5 s, con `fps` y `sesionVision`. Tras 15 s sin señal, el panel muestra la visión **fuera de línea**.
 - **RNF-06:** cada cruce deja en el log de la API una línea `RNF-06` con la hora del fotograma, la hora de llegada y el retraso en milisegundos.
 
 ### Ana — web (interfaz C6)
 
-- `GET /api/torniquetes` devuelve `[{ id, nombre, estado, conectado, ultimaSenal }]` (Contrato §8). Sirve para el panel mientras llega SignalR.
+- **SignalR:** hub `/hubs/eventos`, evento `EstadoTorniquete` con el formato del contrato C6:
+
+  ```json
+  { "torniqueteId": "tq_1", "estado": "Cerrado|EsperandoCruce|Alarma|ModoRegistro",
+    "esp32Conectado": true, "visionConectada": true, "desincronizado": false }
+  ```
+
+  - Al conectarse, el panel recibe enseguida el estado actual de cada torniquete; después, un evento por cada cambio. Los cambios llegan en menos de 1 s (RNF-05 pide 2 s).
+  - Por ahora no exige sesión y toda conexión entra al grupo `operacion`.
+  - Ejemplo con `@microsoft/signalr`:
+
+  ```js
+  const conexion = new signalR.HubConnectionBuilder().withUrl("/hubs/eventos").withAutomaticReconnect().build();
+  conexion.on("EstadoTorniquete", (e) => console.log(e.estado, e.esp32Conectado));
+  await conexion.start();
+  ```
+
+- `GET /api/torniquetes` devuelve `[{ id, nombre, estado, conectado, ultimaSenal }]` (Contrato §8), útil para la carga inicial.
 - `POST /api/alertas/{alertaId}/apagar-alarma` apaga la alarma y cierra la alerta.
-- Las dos funcionan **sin sesión** por ahora; exigirán sesión de operador cuando esté Identity.
+- Estas rutas funcionan **sin sesión** por ahora; exigirán sesión de operador cuando esté Identity.
 - El OpenAPI para generar los tipos TypeScript está en `http://<IP>:5000/openapi/v1.json`.
-- Pendiente de mi parte: el hub de SignalR (`/hubs/eventos`) con el evento `EstadoTorniquete`.
 
 ### Jeisy — cuentas, tarjetas y saldo (interfaz C7)
 
@@ -66,6 +84,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
   2. `ResultadoDebito` quedó como `(bool Exitoso, decimal SaldoRestante)`. Si el saldo no alcanza, no se descuenta nada (S3).
   3. C7 usa `decimal` para el dinero y el JSON usa enteros (RNF-24). Hoy la API convierte a entero al responder.
 - El id del paso se reserva **antes** de debitar, porque `DebitarAsync` lo recibe.
+- `INotificador` (también de C7, lo implemento yo) está en `Application/Notificaciones/`. Por ahora solo tiene `EstadoTorniqueteAsync`, y recibe el estado ya calculado en lugar del id del torniquete, como dice el contrato. Cuando agregue `SaldoActualizadoAsync` para tus recargas, te aviso.
 
 ## Mediciones de H1 (RNF-04 y RNF-06)
 
@@ -91,11 +110,17 @@ dotnet run --project TransitGate.Api | Tee-Object -FilePath mediciones.log
 | Todo en memoria; se pierde al reiniciar | Cuando esté la base de datos (Jeisy, semana 2) |
 | Sin `X-Device-Key` ni sesión en el panel | Con la base de datos e Identity (semanas 2 y 3) |
 | No se registra el `IntentoAcceso` ni hay transacción del paso (RNF-15) | Semana 3 |
-| Un paso vencido se detecta en el siguiente latido o consulta (≤ 300 ms con el ESP32 conectado) | Semana 4, con la expiración y los eventos de SignalR |
 | No se revierte el débito si el brazo no abre (RF-46) | Semana 6 |
+| SignalR solo envía `EstadoTorniquete`; faltan `IntentoRegistrado`, `AlertaNueva`, `SaldoActualizado` y los demás | Semanas 3 a 5, junto con cada entidad |
+| `INotificador.EstadoTorniqueteAsync` no coincide con la firma del contrato C7 | Actualizar el documento de integración en un PR con la etiqueta `contrato` |
 | Modo registro sin ruta todavía; el desafío del celular es fijo | Semanas 4 y Fase 4 |
 
 ## Historial
+
+**13 de octubre (semana 2), segunda parte**
+- Hub de SignalR `/hubs/eventos` con el evento `EstadoTorniquete`.
+- Revisión de los torniquetes cada 500 ms: cierra los pasos vencidos sin esperar un latido y detecta cuándo el ESP32 o la visión dejan de responder.
+- Desincronización: aviso cuando el ESP32 no aplica el estado deseado durante más de 2 s (RF-45 CA4).
 
 **13 de octubre (semana 2)**
 - Caso de uso de validación de la lectura con las interfaces C7 y tarjetas de prueba configurables.

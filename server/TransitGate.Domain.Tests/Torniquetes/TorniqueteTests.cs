@@ -10,6 +10,10 @@ public class TorniqueteTests
     private static readonly TimeSpan Ventana = TimeSpan.FromSeconds(10); // S4
     private static readonly TimeSpan Gracia = TimeSpan.FromSeconds(1);   // S13, valor mientras se mide
 
+    // Estados que reporta el ESP32 en el latido.
+    private static readonly EstadoDeseado Cerrado = new(BrazoAbierto: false, SirenaEncendida: false);
+    private static readonly EstadoDeseado Abierto = new(BrazoAbierto: true, SirenaEncendida: false);
+
     private static DateTime Seg(double segundos) => T0.AddSeconds(segundos);
 
     private static Torniquete NuevoTorniquete() => new("tq_1", "Torniquete 1");
@@ -258,10 +262,10 @@ public class TorniqueteTests
     {
         var torniquete = ConPasoAutorizado(out var paso);
 
-        torniquete.RegistrarLatidoEsp32(Seg(0.3), pasoIdAbierto: 999, arranque: "a1f3");
+        torniquete.RegistrarLatidoEsp32(Seg(0.3), Abierto, pasoIdAbierto: 999, arranque: "a1f3");
         Assert.Null(paso.AperturaConfirmadaEn);
 
-        torniquete.RegistrarLatidoEsp32(Seg(0.6), pasoIdAbierto: 123, arranque: "a1f3");
+        torniquete.RegistrarLatidoEsp32(Seg(0.6), Abierto, pasoIdAbierto: 123, arranque: "a1f3");
         Assert.Equal(Seg(0.6), paso.AperturaConfirmadaEn);
     }
 
@@ -272,7 +276,7 @@ public class TorniqueteTests
         var plazo = TimeSpan.FromSeconds(5);
         Assert.False(torniquete.Esp32Conectado(T0, plazo));
 
-        torniquete.RegistrarLatidoEsp32(T0, pasoIdAbierto: null, arranque: "a1f3");
+        torniquete.RegistrarLatidoEsp32(T0, Cerrado, pasoIdAbierto: null, arranque: "a1f3");
 
         Assert.True(torniquete.Esp32Conectado(Seg(4.9), plazo));
         Assert.False(torniquete.Esp32Conectado(Seg(5), plazo));
@@ -306,6 +310,44 @@ public class TorniqueteTests
         torniquete.RegistrarCruce(SentidoCruce.Entrada, Seg(20), Seg(20));
         Assert.Equal(new EstadoDeseado(false, true), torniquete.Deseado);
         Assert.Equal(Seg(20), torniquete.DeseadoDesde);
+    }
+
+    [Fact] // RF-45 CA4
+    public void Si_el_esp32_no_aplica_el_estado_deseado_por_mas_de_2_s_queda_desincronizado()
+    {
+        var torniquete = ConPasoAutorizado(out _);   // deseado: brazo abierto
+        var tolerancia = TimeSpan.FromSeconds(2);
+
+        torniquete.RegistrarLatidoEsp32(Seg(0.3), Cerrado, pasoIdAbierto: null, arranque: "a1f3");
+        torniquete.RegistrarLatidoEsp32(Seg(2.3), Cerrado, pasoIdAbierto: null, arranque: "a1f3");
+
+        Assert.False(torniquete.Desincronizado(Seg(2.3), tolerancia));
+        Assert.True(torniquete.Desincronizado(Seg(2.4), tolerancia));
+    }
+
+    [Fact] // RF-45 CA4
+    public void Un_latido_de_desfase_tras_un_cambio_no_desincroniza()
+    {
+        var torniquete = ConPasoAutorizado(out _);
+
+        torniquete.RegistrarLatidoEsp32(Seg(0.3), Cerrado, pasoIdAbierto: null, arranque: "a1f3");
+        torniquete.RegistrarLatidoEsp32(Seg(0.6), Abierto, pasoIdAbierto: 123, arranque: "a1f3");
+
+        Assert.Null(torniquete.DistintoDelDeseadoDesde);
+        Assert.False(torniquete.Desincronizado(Seg(5), TimeSpan.FromSeconds(2)));
+    }
+
+    [Fact] // RF-45 CA4
+    public void Un_estado_deseado_nuevo_borra_la_desincronizacion_del_anterior()
+    {
+        var torniquete = EnAlarma();   // deseado: sirena encendida
+        torniquete.RegistrarLatidoEsp32(Seg(0.3), Cerrado, pasoIdAbierto: null, arranque: "a1f3");
+        torniquete.RegistrarLatidoEsp32(Seg(3), Cerrado, pasoIdAbierto: null, arranque: "a1f3");
+        Assert.True(torniquete.Desincronizado(Seg(3), TimeSpan.FromSeconds(2)));
+
+        torniquete.ApagarAlarma(Seg(3.1));
+
+        Assert.False(torniquete.Desincronizado(Seg(3.1), TimeSpan.FromSeconds(2)));
     }
 
     [Fact]

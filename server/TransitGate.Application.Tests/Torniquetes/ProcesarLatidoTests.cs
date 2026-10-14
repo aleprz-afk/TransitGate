@@ -23,7 +23,7 @@ public class ProcesarLatidoTests
     }
 
     private Task<OrdenEsp32?> Latido(long? pasoIdAbierto = null, string arranque = "a1f3") =>
-        _procesarLatido.DelEsp32Async("tq_1", pasoIdAbierto, arranque);
+        _procesarLatido.DelEsp32Async("tq_1", new EstadoDeseado(pasoIdAbierto is not null, false), pasoIdAbierto, arranque);
 
     [Fact] // RF-45
     public async Task Con_un_paso_pendiente_el_latido_ordena_el_brazo_abierto()
@@ -72,7 +72,7 @@ public class ProcesarLatidoTests
     [Fact]
     public async Task Un_torniquete_que_no_existe_devuelve_null()
     {
-        Assert.Null(await _procesarLatido.DelEsp32Async("tq_9", null, "a1f3"));
+        Assert.Null(await _procesarLatido.DelEsp32Async("tq_9", default, null, "a1f3"));
         Assert.False(await _procesarLatido.DeLaVisionAsync("tq_9"));
     }
 

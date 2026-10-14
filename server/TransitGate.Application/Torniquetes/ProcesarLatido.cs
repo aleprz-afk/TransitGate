@@ -17,7 +17,7 @@ public sealed class ProcesarLatido(
 {
     /// <summary>Devuelve null si el torniquete no existe.</summary>
     public async Task<OrdenEsp32?> DelEsp32Async(
-        string torniqueteId, long? pasoIdAbierto, string arranque, CancellationToken ct = default)
+        string torniqueteId, EstadoDeseado real, long? pasoIdAbierto, string arranque, CancellationToken ct = default)
     {
         if (await torniquetes.ObtenerAsync(torniqueteId, ct) is not { } torniquete)
             return null;
@@ -30,7 +30,7 @@ public sealed class ProcesarLatido(
 
             torniquete.ActualizarPorTiempo(ahora);
             bitacora.SiCambioElDeseado(torniquete, antes, "vencimiento");
-            torniquete.RegistrarLatidoEsp32(ahora, pasoIdAbierto, arranque);
+            torniquete.RegistrarLatidoEsp32(ahora, real, pasoIdAbierto, arranque);
 
             if (arranqueAnterior is not null && arranqueAnterior != arranque)
                 bitacora.Esp32Reiniciado(torniqueteId, arranqueAnterior, arranque);

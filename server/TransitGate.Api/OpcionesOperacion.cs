@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Options;
 using TransitGate.Application.Torniquetes;
 
 namespace TransitGate.Api;
@@ -6,7 +7,7 @@ namespace TransitGate.Api;
 /// Tiempos de operación con sus valores por defecto (RNF-40): se cambian en appsettings.json sin recompilar.
 /// Cuando exista RF-44, lo que el administrador guarde en la base de datos prevalece.
 /// </summary>
-public sealed class OpcionesOperacion : IParametrosOperacion
+public sealed class OpcionesOperacion
 {
     public const string Seccion = "Operacion";
 
@@ -19,9 +20,18 @@ public sealed class OpcionesOperacion : IParametrosOperacion
     /// <summary>S14: plazo sin latidos del ESP32 para marcarlo sin conexión.</summary>
     public int PlazoSenalEsp32Segundos { get; set; } = 5;
 
-    public TimeSpan VentanaPaso => TimeSpan.FromSeconds(ExpiracionPasoSegundos);
+    /// <summary>S14: plazo sin señal de la visión para marcarla fuera de línea.</summary>
+    public int PlazoSenalVisionSegundos { get; set; } = 15;
+}
 
-    public TimeSpan GraciaVision => TimeSpan.FromMilliseconds(GraciaVisionMs);
+/// <summary>Lee la configuración en cada consulta, así un cambio en appsettings.json aplica sin reiniciar.</summary>
+public sealed class ParametrosDesdeConfiguracion(IOptionsMonitor<OpcionesOperacion> opciones) : IParametrosOperacion
+{
+    public TimeSpan VentanaPaso => TimeSpan.FromSeconds(opciones.CurrentValue.ExpiracionPasoSegundos);
 
-    public TimeSpan PlazoSenalEsp32 => TimeSpan.FromSeconds(PlazoSenalEsp32Segundos);
+    public TimeSpan GraciaVision => TimeSpan.FromMilliseconds(opciones.CurrentValue.GraciaVisionMs);
+
+    public TimeSpan PlazoSenalEsp32 => TimeSpan.FromSeconds(opciones.CurrentValue.PlazoSenalEsp32Segundos);
+
+    public TimeSpan PlazoSenalVision => TimeSpan.FromSeconds(opciones.CurrentValue.PlazoSenalVisionSegundos);
 }
