@@ -34,6 +34,9 @@ public class Torniquete
 
     public DateTime? UltimaSenalVision { get; private set; }
 
+    /// <summary>Desde cuándo el estado que reporta el ESP32 no coincide con el deseado (null si coincide).</summary>
+    public DateTime? DistintoDelDeseadoDesde { get; private set; }
+
     // Estado deseado que recibe el ESP32. En Alarma el brazo queda cerrado y la sirena suena (RF-45 CA3).
     public bool BrazoDeseadoAbierto => Estado == EstadoTorniquete.EsperandoCruce;
 
@@ -81,17 +84,26 @@ public class Torniquete
     }
 
     /// <summary>
-    /// Latido del ESP32 (RF-45, S11): registra la señal de vida y, si reporta el brazo abierto para el paso
-    /// pendiente, confirma la apertura (RF-22 CA4).
+    /// Latido del ESP32 (RF-45, S11): registra la señal de vida y el estado real que reporta y, si reporta
+    /// el brazo abierto para el paso pendiente, confirma la apertura (RF-22 CA4).
     /// </summary>
-    public void RegistrarLatidoEsp32(DateTime ahora, long? pasoIdAbierto, string arranque)
+    public void RegistrarLatidoEsp32(DateTime ahora, EstadoDeseado real, long? pasoIdAbierto, string arranque)
     {
         UltimaSenalEsp32 = ahora;
         ArranqueEsp32 = arranque;
 
         if (pasoIdAbierto is { } pasoId && PasoPendiente?.Id == pasoId)
             PasoPendiente.ConfirmarApertura(ahora);
+
+        // El ESP32 reporta lo que aplicó con el latido anterior: tras cada cambio hay un latido de desfase.
+        DistintoDelDeseadoDesde = real == Deseado ? null : DistintoDelDeseadoDesde ?? ahora;
     }
+
+    /// <summary>
+    /// RF-45 CA4: el estado reportado no coincide con el deseado desde hace más de <paramref name="tolerancia"/>.
+    /// </summary>
+    public bool Desincronizado(DateTime ahora, TimeSpan tolerancia) =>
+        DistintoDelDeseadoDesde is { } desde && ahora - desde > tolerancia;
 
     public void RegistrarLatidoVision(DateTime ahora) => UltimaSenalVision = ahora;
 
@@ -180,7 +192,10 @@ public class Torniquete
     {
         var antes = Deseado;
         Estado = nuevo;
-        if (Deseado != antes)
-            DeseadoDesde = momento;
+        if (Deseado == antes)
+            return;
+
+        DeseadoDesde = momento;
+        DistintoDelDeseadoDesde = null;   // con un deseado nuevo, la comparación empieza en el próximo latido
     }
 }

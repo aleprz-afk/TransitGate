@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using TransitGate.Application.Cuentas;
+using TransitGate.Application.Notificaciones;
 using TransitGate.Application.Torniquetes;
 using TransitGate.Application.Validacion;
 using TransitGate.Domain.Tarjetas;
@@ -86,6 +87,19 @@ internal sealed class ParametrosFijos : IParametrosOperacion
     public TimeSpan GraciaVision { get; set; } = TimeSpan.FromSeconds(1);
 
     public TimeSpan PlazoSenalEsp32 { get; set; } = TimeSpan.FromSeconds(5);
+
+    public TimeSpan PlazoSenalVision { get; set; } = TimeSpan.FromSeconds(15);
+}
+
+internal sealed class NotificadorFalso : INotificador
+{
+    public List<EstadoTorniqueteVista> Enviados { get; } = [];
+
+    public Task EstadoTorniqueteAsync(EstadoTorniqueteVista estado, CancellationToken ct = default)
+    {
+        Enviados.Add(estado);
+        return Task.CompletedTask;
+    }
 }
 
 internal sealed class RelojFijo(DateTime ahoraUtc) : TimeProvider

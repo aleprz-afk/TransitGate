@@ -63,7 +63,8 @@ public static partial class DispositivosEndpoints
         if (latido.SirenaReal is null || string.IsNullOrWhiteSpace(latido.Arranque))
             return Invalido("LatidoIncompleto", "Faltan sirenaReal o arranque.");
 
-        var orden = await procesarLatido.DelEsp32Async(id, latido.PasoIdAbierto, latido.Arranque, ct);
+        var real = new EstadoDeseado(latido.BrazoReal == "abierto", latido.SirenaReal.Value);
+        var orden = await procesarLatido.DelEsp32Async(id, real, latido.PasoIdAbierto, latido.Arranque, ct);
         if (orden is null)
             return TorniqueteNoRegistrado(id);
 

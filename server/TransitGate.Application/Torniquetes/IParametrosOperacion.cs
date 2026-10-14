@@ -14,4 +14,7 @@ public interface IParametrosOperacion
 
     /// <summary>S14: sin latidos del ESP32 durante este plazo, el torniquete figura sin conexión.</summary>
     TimeSpan PlazoSenalEsp32 { get; }
+
+    /// <summary>S14: sin señal de la visión durante este plazo, figura fuera de línea (RF-30).</summary>
+    TimeSpan PlazoSenalVision { get; }
 }
