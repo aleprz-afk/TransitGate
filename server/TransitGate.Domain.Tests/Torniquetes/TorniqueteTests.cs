@@ -350,6 +350,22 @@ public class TorniqueteTests
         Assert.False(torniquete.Desincronizado(Seg(3.1), TimeSpan.FromSeconds(2)));
     }
 
+    [Fact] // HU-20 CA2
+    public void Cada_cambio_de_estado_guarda_desde_cuando_esta_asi()
+    {
+        var torniquete = NuevoTorniquete();
+        Assert.Null(torniquete.EstadoDesde);
+
+        torniquete.ActivarModoRegistro(T0, TimeSpan.FromSeconds(60));
+        Assert.Equal(T0, torniquete.EstadoDesde);
+
+        torniquete.RegistrarCruce(SentidoCruce.Entrada, Seg(5), Seg(5));      // fraude: Alarma
+        Assert.Equal(Seg(5), torniquete.EstadoDesde);
+
+        torniquete.RegistrarCruce(SentidoCruce.Entrada, Seg(8), Seg(8));      // sigue en Alarma
+        Assert.Equal(Seg(5), torniquete.EstadoDesde);
+    }
+
     [Fact]
     public void Entrar_en_modo_registro_no_cambia_el_estado_deseado()
     {

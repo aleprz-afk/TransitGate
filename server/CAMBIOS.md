@@ -1,6 +1,6 @@
 # Cambios del servidor: validación y torniquete
 
-Responsable: Alex · Última actualización: 14 de octubre de 2026 · Lo anterior ya está en `main` (PR #2, #3 y #4); en curso: `feat/x-device-key`
+Responsable: Alex · Última actualización: 14 de octubre de 2026 · Lo anterior ya está en `main` (PR #2, #3 y #4); en curso: `feat/x-device-key` y `feat/estado-torniquete-horas`
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -14,7 +14,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - El hub de SignalR `/hubs/eventos` envía `EstadoTorniquete` en vivo: estado, conexión del ESP32 y de la visión, y desincronización.
 - Todo vive en memoria hasta que esté la base de datos (PostgreSQL en Docker, ver "Decisiones"): **al reiniciar la API se pierde el estado**.
 - El ESP32 y la visión se identifican con la cabecera `X-Device-Key`. Por ahora en **modo tolerante**: no se rechaza nada, solo queda en el log.
-- Hay 63 pruebas automatizadas (dominio y casos de uso), una por criterio de aceptación.
+- Hay 66 pruebas automatizadas (dominio y casos de uso), una por criterio de aceptación.
 
 ## Decisiones
 
@@ -99,13 +99,18 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 
 ### Ana — web (interfaz C6)
 
-- **SignalR:** hub `/hubs/eventos`, evento `EstadoTorniquete` con el formato del contrato C6:
+- **SignalR:** hub `/hubs/eventos`, evento `EstadoTorniquete`. Son los campos del contrato C6 más dos horas para HU-20, `estadoDesde` y `ultimaSenal`:
 
   ```json
   { "torniqueteId": "tq_1", "estado": "Cerrado|EsperandoCruce|Alarma|ModoRegistro",
-    "esp32Conectado": true, "visionConectada": true, "desincronizado": false }
+    "estadoDesde": "2026-10-14T15:29:23.002Z",
+    "esp32Conectado": true, "ultimaSenal": "2026-10-14T15:29:22.736Z",
+    "visionConectada": true, "desincronizado": false }
   ```
 
+  - `estadoDesde`: desde cuándo está en ese estado, por ejemplo para mostrar "En alarma desde las 10:29" (HU-20 CA2). Es `null` si el torniquete no ha cambiado de estado desde que arrancó la API.
+  - `ultimaSenal`: hora del último latido del ESP32, para mostrar "Fuera de línea desde…" cuando `esp32Conectado` pasa a `false` (HU-20 CA3). Es `null` si todavía no ha llegado ningún latido. Un latido nuevo **no** genera un evento: la hora solo viaja cuando cambia algo más.
+  - Las dos horas vienen en UTC; se muestran en hora de Colombia con `Intl.DateTimeFormat` y `timeZone: "America/Bogota"` (RNF-42).
   - Al conectarse, el panel recibe enseguida el estado actual de cada torniquete; después, un evento por cada cambio. Los cambios llegan en menos de 1 s (RNF-05 pide 2 s).
   - Por ahora no exige sesión y toda conexión entra al grupo `operacion`.
   - Ejemplo con `@microsoft/signalr`:
@@ -192,13 +197,14 @@ dotnet run --project TransitGate.Api | Tee-Object -FilePath mediciones.log
 | Una lectura en modo registro se rechazaría como `TorniqueteOcupado` y dejaría un intento (RF-23 CA3 pide que no deje ninguno) | Semana 4, con la ruta del modo registro |
 | No se revierte el débito si el brazo no abre (RF-46) | Semana 6 |
 | SignalR solo envía `EstadoTorniquete`; faltan `IntentoRegistrado`, `AlertaNueva`, `SaldoActualizado` y los demás | Semanas 3 a 5, junto con cada entidad |
-| `INotificador.EstadoTorniqueteAsync` no coincide con la firma del contrato C7 | Actualizar el documento de integración en un PR con la etiqueta `contrato` |
+| El documento de integración (v1.2) no tiene todavía `estadoDesde` ni `ultimaSenal` en `EstadoTorniquete` (C6), y `INotificador.EstadoTorniqueteAsync` tiene otra firma que en C7 | Subir los contratos a `docs/` y actualizarlos a v1.3 en un PR con la etiqueta `contrato`, aprobado por Ana (C6) |
 | Modo registro sin ruta todavía; el desafío del celular es fijo | Semanas 4 y Fase 4 |
 
 ## Historial
 
 **14 de octubre (semana 2)**
 - `X-Device-Key` en las rutas del ESP32 y de la visión (RNF-20), en modo tolerante hasta después del H1. Una clave por dispositivo y por torniquete, en los secretos de usuario.
+- `EstadoTorniquete` trae `estadoDesde` y `ultimaSenal`, para que el panel muestre desde qué hora está en alarma y desde cuándo está fuera de línea (HU-20).
 
 **13 de octubre (semana 2), tercera parte**
 - Decisión: PostgreSQL local con Docker (sección "Decisiones").

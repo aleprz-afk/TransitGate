@@ -41,11 +41,14 @@ public sealed class MonitorTorniquetes(
                 vista = Vista(torniquete, ahora);
             }
 
-            if (_publicados.TryGetValue(torniquete.Id, out var anterior) && anterior == vista)
-                continue;
-
+            // Se guarda siempre la vista más reciente (quien se conecte al hub ve la última señal al día),
+            // pero solo se publica si cambió algo más que la última señal, que cambia con cada latido.
+            var hayCambio = !_publicados.TryGetValue(torniquete.Id, out var anterior)
+                || anterior with { UltimaSenal = null } != vista with { UltimaSenal = null };
             _publicados[torniquete.Id] = vista;
-            await notificador.EstadoTorniqueteAsync(vista, ct);
+
+            if (hayCambio)
+                await notificador.EstadoTorniqueteAsync(vista, ct);
         }
     }
 
@@ -56,7 +59,9 @@ public sealed class MonitorTorniquetes(
         return new EstadoTorniqueteVista(
             torniquete.Id,
             torniquete.Estado,
+            torniquete.EstadoDesde,
             esp32Conectado,
+            torniquete.UltimaSenalEsp32,
             torniquete.VisionConectada(ahora, parametros.PlazoSenalVision),
             // Sin conexión no tiene sentido hablar de desincronización: eso ya lo dice esp32Conectado.
             esp32Conectado && torniquete.Desincronizado(ahora, ToleranciaDesincronizacion));

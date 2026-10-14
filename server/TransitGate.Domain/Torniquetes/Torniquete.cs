@@ -21,6 +21,12 @@ public class Torniquete
 
     public EstadoTorniquete Estado { get; private set; } = EstadoTorniquete.Cerrado;
 
+    /// <summary>
+    /// Desde cuándo está en el estado actual, para que el panel muestre, por ejemplo, desde qué hora está en
+    /// Alarma (HU-20). Null si no ha cambiado de estado desde que arrancó la API.
+    /// </summary>
+    public DateTime? EstadoDesde { get; private set; }
+
     /// <summary>El único paso Pendiente mientras el torniquete está en EsperandoCruce (RF-22 CA3).</summary>
     public PasoAutorizado? PasoPendiente { get; private set; }
 
@@ -190,8 +196,12 @@ public class Torniquete
 
     private void CambiarEstado(EstadoTorniquete nuevo, DateTime momento)
     {
+        if (nuevo == Estado)
+            return;
+
         var antes = Deseado;
         Estado = nuevo;
+        EstadoDesde = momento;
         if (Deseado == antes)
             return;
 
