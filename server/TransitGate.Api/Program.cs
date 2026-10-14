@@ -1,8 +1,10 @@
 using Scalar.AspNetCore;
 using TransitGate.Api;
+using TransitGate.Api.Diagnostico;
 using TransitGate.Api.Endpoints;
 using TransitGate.Api.Esqueleto;
 using TransitGate.Api.TiempoReal;
+using TransitGate.Application.Accesos;
 using TransitGate.Application.Notificaciones;
 using TransitGate.Application.Torniquetes;
 using TransitGate.Application.Validacion;
@@ -27,12 +29,15 @@ builder.Services.AddSingleton<BitacoraTorniquete>();
 builder.Services.AddScoped<ValidarLectura>();
 builder.Services.AddScoped<ProcesarLatido>();
 builder.Services.AddScoped<ConsultarTorniquetes>();
+builder.Services.AddScoped<ConsultarIntentos>();
 builder.Services.AddSingleton<INotificador, NotificadorSignalR>();
 builder.Services.AddSingleton<MonitorTorniquetes>();
 builder.Services.AddHostedService<ServicioMonitorTorniquetes>();
 builder.Services.AddEsqueletoEnMemoria(builder.Configuration);
 
 var app = builder.Build();
+
+app.UseMiddleware<MiddlewareTiempos>();
 
 app.MapOpenApi();               // /openapi/v1.json
 app.MapScalarApiReference();    // /scalar

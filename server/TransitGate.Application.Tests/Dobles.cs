@@ -1,8 +1,9 @@
 using Microsoft.Extensions.Logging.Abstractions;
+using TransitGate.Application.Accesos;
 using TransitGate.Application.Cuentas;
 using TransitGate.Application.Notificaciones;
 using TransitGate.Application.Torniquetes;
-using TransitGate.Application.Validacion;
+using TransitGate.Domain.Accesos;
 using TransitGate.Domain.Tarjetas;
 using TransitGate.Domain.Torniquetes;
 
@@ -66,16 +67,35 @@ internal sealed class TorniquetesFalsos(Torniquete torniquete) : ITorniqueteRepo
     public Task<long> SiguientePasoIdAsync(CancellationToken ct = default) => Task.FromResult(++_ultimoPasoId);
 }
 
-internal sealed class LecturasFalsas : ILecturasProcesadas
+internal sealed class IntentosFalsos : IIntentoRepositorio
 {
-    private readonly Dictionary<(string, string), ResultadoLectura> _lecturas = [];
+    private long _ultimoId;
 
-    public Task<ResultadoLectura?> BuscarAsync(string torniqueteId, string lecturaId, CancellationToken ct = default) =>
-        Task.FromResult(_lecturas.GetValueOrDefault((torniqueteId, lecturaId)));
+    public List<IntentoAcceso> Guardados { get; } = [];
 
-    public Task GuardarAsync(string torniqueteId, string lecturaId, ResultadoLectura resultado, CancellationToken ct = default)
+    public Task<long> SiguienteIdAsync(CancellationToken ct = default) => Task.FromResult(++_ultimoId);
+
+    public Task AgregarAsync(IntentoAcceso intento, CancellationToken ct = default)
     {
-        _lecturas[(torniqueteId, lecturaId)] = resultado;
+        Guardados.Add(intento);
+        return Task.CompletedTask;
+    }
+
+    public Task<IntentoAcceso?> BuscarPorLecturaAsync(string torniqueteId, string lecturaId, CancellationToken ct = default) =>
+        Task.FromResult(Guardados.FirstOrDefault(i => i.TorniqueteId == torniqueteId && i.LecturaId == lecturaId));
+
+    public Task<IReadOnlyList<IntentoAcceso>> ListarPorTorniqueteAsync(string torniqueteId, int limite, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<IntentoAcceso>>(
+            [.. Guardados.Where(i => i.TorniqueteId == torniqueteId).OrderByDescending(i => i.Id).Take(limite)]);
+}
+
+internal sealed class UnidadDeTrabajoFalsa : IUnidadDeTrabajo
+{
+    public int VecesGuardada { get; private set; }
+
+    public Task GuardarCambiosAsync(CancellationToken ct = default)
+    {
+        VecesGuardada++;
         return Task.CompletedTask;
     }
 }

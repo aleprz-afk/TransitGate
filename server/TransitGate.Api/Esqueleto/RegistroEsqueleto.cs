@@ -1,6 +1,7 @@
+using TransitGate.Application;
+using TransitGate.Application.Accesos;
 using TransitGate.Application.Cuentas;
 using TransitGate.Application.Torniquetes;
-using TransitGate.Application.Validacion;
 
 namespace TransitGate.Api.Esqueleto;
 
@@ -14,7 +15,8 @@ public static class RegistroEsqueleto
     {
         services.Configure<DatosDePrueba>(configuracion.GetSection(DatosDePrueba.Seccion));
         services.AddSingleton<ITorniqueteRepositorio, TorniqueteRepositorioEnMemoria>();
-        services.AddSingleton<ILecturasProcesadas, LecturasProcesadasEnMemoria>();
+        services.AddSingleton<IIntentoRepositorio, IntentoRepositorioEnMemoria>();
+        services.AddSingleton<IUnidadDeTrabajo, UnidadDeTrabajoEnMemoria>();
         services.AddSingleton<CuentasDePrueba>();
         services.AddSingleton<ISoporteResolver>(sp => sp.GetRequiredService<CuentasDePrueba>());
         services.AddSingleton<ISaldoService>(sp => sp.GetRequiredService<CuentasDePrueba>());

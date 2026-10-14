@@ -14,15 +14,18 @@ public class ValidarLecturaTests
     private readonly Torniquete _torniquete = new("tq_1", "Torniquete 1");
     private readonly CuentasFalsas _cuentas = new();
     private readonly ParametrosFijos _parametros = new();
+    private readonly IntentosFalsos _intentos = new();
+    private readonly UnidadDeTrabajoFalsa _unidadDeTrabajo = new();
     private readonly ValidarLectura _validarLectura;
 
     public ValidarLecturaTests()
     {
         _validarLectura = new ValidarLectura(
             new TorniquetesFalsos(_torniquete),
-            new LecturasFalsas(),
+            _intentos,
             _cuentas,
             _cuentas,
+            _unidadDeTrabajo,
             _parametros,
             new CerrojoTorniquetes(),
             Bitacora.Nula(),
@@ -148,6 +151,54 @@ public class ValidarLecturaTests
 
         Assert.Equal(primera, reintento);
         Assert.Single(_cuentas.Debitos);
+        Assert.Single(_intentos.Guardados);
+        Assert.Equal(1, _unidadDeTrabajo.VecesGuardada);
+    }
+
+    [Fact] // RF-23 CA1, RNF-15
+    public async Task Un_paso_exitoso_deja_un_intento_exitoso_con_la_tarifa_cobrada()
+    {
+        var soporte = _cuentas.Agregar("04A1B2C3", saldo: 5000);
+
+        var resultado = await Leer("04A1B2C3", "a1f3-0001");
+
+        var intento = Assert.Single(_intentos.Guardados);
+        Assert.Equal(ResultadoIntento.Exitoso, intento.Resultado);
+        Assert.Equal(3200, intento.TarifaCobrada);
+        Assert.Equal(soporte.TarjetaId, intento.TarjetaId);
+        Assert.Equal(resultado!.PasoId, intento.PasoId);
+        Assert.Equal("a1f3-0001", intento.LecturaId);
+        Assert.Equal(Ahora, intento.Fecha);
+        Assert.Equal(TipoSoporte.Fisico, intento.TipoSoporte);
+        Assert.Null(intento.Motivo);
+        Assert.Equal(1, _unidadDeTrabajo.VecesGuardada);
+    }
+
+    [Fact] // RF-23 CA2
+    public async Task Un_uid_desconocido_deja_un_intento_rechazado_sin_tarjeta_y_con_el_uid_leido()
+    {
+        await Leer("0A0B0C0D");
+
+        var intento = Assert.Single(_intentos.Guardados);
+        Assert.Equal(ResultadoIntento.Rechazado, intento.Resultado);
+        Assert.Equal(MotivoIntento.TarjetaNoRegistrada, intento.Motivo);
+        Assert.Null(intento.TarjetaId);
+        Assert.Equal("0A0B0C0D", intento.UidLeido);
+        Assert.Null(intento.TarifaCobrada);
+    }
+
+    [Fact] // RF-23, RF-24: el rechazo queda en el historial del dueño de la tarjeta
+    public async Task Un_rechazo_por_torniquete_ocupado_queda_ligado_a_la_tarjeta()
+    {
+        _cuentas.Agregar("04A1B2C3", saldo: 10000);
+        var segunda = _cuentas.Agregar("11223344", saldo: 10000);
+        await Leer("04A1B2C3", "a1f3-0001");
+
+        await Leer("11223344", "a1f3-0002");
+
+        var rechazo = _intentos.Guardados[1];
+        Assert.Equal(MotivoIntento.TorniqueteOcupado, rechazo.Motivo);
+        Assert.Equal(segunda.TarjetaId, rechazo.TarjetaId);
     }
 
     [Fact] // S4 y S13 vienen de la configuración (RNF-40)

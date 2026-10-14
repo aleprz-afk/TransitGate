@@ -2,6 +2,7 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http.HttpResults;
 using TransitGate.Api.Contratos;
 using TransitGate.Api.Esqueleto;
+using TransitGate.Application.Accesos;
 using TransitGate.Application.Torniquetes;
 using TransitGate.Application.Validacion;
 using TransitGate.Domain.Torniquetes;
@@ -32,6 +33,8 @@ public static partial class DispositivosEndpoints
         var monitoreo = app.MapGroup("/api").WithTags("Monitoreo");
         monitoreo.MapGet("/torniquetes", ListarTorniquetes)
             .WithSummary("Estado y conexión de los torniquetes (RF-31, RF-37). Sin sesión hasta que exista Identity");
+        monitoreo.MapGet("/torniquetes/{id}/intentos", ListarIntentos)
+            .WithSummary("Últimos 100 intentos de acceso, sin filtros todavía (RF-32). Sin sesión hasta que exista Identity");
         monitoreo.MapPost("/alertas/{id}/apagar-alarma", ApagarAlarma)
             .WithSummary("Apaga la alarma y cierra la alerta (RF-34). Sin sesión hasta que exista Identity");
 
@@ -111,6 +114,16 @@ public static partial class DispositivosEndpoints
     {
         var resumenes = await consultarTorniquetes.EjecutarAsync(ct);
         return TypedResults.Ok(resumenes.Select(TorniqueteResumen.Desde).ToArray());
+    }
+
+    private static async Task<Results<Ok<IntentoResumen[]>, NotFound<ErrorApi>>> ListarIntentos(
+        string id, ConsultarIntentos consultarIntentos, CancellationToken ct)
+    {
+        var intentos = await consultarIntentos.EjecutarAsync(id, ct);
+        if (intentos is null)
+            return TorniqueteNoRegistrado(id);
+
+        return TypedResults.Ok(intentos.Select(IntentoResumen.Desde).ToArray());
     }
 
     private static async Task<Results<Ok, NotFound<ErrorApi>>> ApagarAlarma(
