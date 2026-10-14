@@ -14,6 +14,19 @@ public class IntentoAccesoTests
             1, "tq_1", "a1f3-0001", T0, TipoSoporte.Fisico, "04A1B2C3", null, MotivoIntento.FraudeSinValidacion));
     }
 
+    [Fact] // RF-28 CA1
+    public void Un_fraude_queda_con_su_motivo_y_su_alerta_sin_lectura_ni_tarjeta()
+    {
+        var intento = IntentoAcceso.Fraude(1, "tq_1", T0, alertaId: 9);
+
+        Assert.Equal(ResultadoIntento.Fraude, intento.Resultado);
+        Assert.Equal(MotivoIntento.FraudeSinValidacion, intento.Motivo);
+        Assert.Equal(9, intento.AlertaId);
+        Assert.Null(intento.LecturaId);
+        Assert.Null(intento.TarjetaId);
+        Assert.Null(intento.TipoSoporte);
+    }
+
     [Fact] // RF-21 CA3: el intento guarda la tarifa que se cobró, aunque cambie después
     public void Un_intento_exitoso_guarda_tarifa_paso_y_saldo()
     {

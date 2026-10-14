@@ -1,6 +1,8 @@
-# TransitGate — Contratos de integración (v1.3)
+# TransitGate — Contratos de integración (v1.4)
 
 El [`TransitGate_Contrato_API.md`](./TransitGate_Contrato_API.md) define las rutas HTTP del servidor. Este documento define todo lo demás que dos integrantes distintos deben construir de forma compatible: el protocolo NFC entre la app y el lector, el stream de la cámara, los pines del hardware, los archivos de configuración, los eventos en tiempo real, el contrato interno entre los dos módulos del servidor y los simuladores. Si un integrante cambia algo de aquí sin avisar, se rompe el trabajo de otro.
+
+**Cambios en v1.4 (14 oct 2026):** C7 — `INotificador` agrega `IntentoRegistradoAsync` y `AlertaActualizadaAsync`; `AlertaNuevaAsync` recibe la alerta en lugar de su id, por la misma razón que `EstadoTorniqueteAsync`. El contenido de los eventos de la sección 6 no cambia.
 
 **Cambios en v1.3 (14 oct 2026):** los contratos pasan a vivir en `docs/` del repositorio. C6 — el evento `EstadoTorniquete` agrega `estadoDesde` y `ultimaSenal`, para que el panel muestre desde qué hora está en alarma y desde cuándo está fuera de línea (HU-20). C7 — se definen `EstadoSoporte` y `ResultadoDebito`, que el contrato usaba sin definir; `INotificador.EstadoTorniqueteAsync` recibe el estado ya calculado en lugar del id; se agrega `IUnidadDeTrabajo` para la transacción del paso (RNF-15); el id del paso se reserva antes de debitar.
 
@@ -237,8 +239,10 @@ public interface ISaldoService                       // implementa Jeisy
 public interface INotificador                        // implementa Alex (sobre SignalR)
 {
     Task SaldoActualizadoAsync(Guid clienteId, decimal saldo, string causa);
-    Task EstadoTorniqueteAsync(EstadoTorniqueteVista estado);   // el estado ya calculado: ver nota
-    Task AlertaNuevaAsync(Guid alertaId);
+    Task EstadoTorniqueteAsync(EstadoTorniqueteVista estado);
+    Task IntentoRegistradoAsync(IntentoAcceso intento);
+    Task AlertaNuevaAsync(AlertaSeguridad alerta);
+    Task AlertaActualizadaAsync(AlertaSeguridad alerta);
     // … un método por evento de la sección 6
 }
 
@@ -256,7 +260,7 @@ public interface IUnidadDeTrabajo                    // implementa Jeisy (sobre 
 
 - `DebitarAsync` no abre su propia transacción: participa en la del caso de uso de validación, que guarda en un solo `IUnidadDeTrabajo.GuardarCambiosAsync` (un `SaveChanges`) el débito, el `IntentoAcceso` y el `PasoAutorizado` (RNF-15). Para eso, `ISaldoService` y los repositorios de Alex comparten el mismo `DbContext`. El débito usa control de concurrencia sobre el saldo (RNF-16).
 - El id del paso se reserva **antes** de debitar, porque `DebitarAsync` lo recibe. Los pasos y los intentos toman su id de una secuencia de PostgreSQL (`UseHiLo` de Npgsql).
-- `EstadoTorniqueteAsync` recibe el estado ya calculado, y no el id del torniquete, porque se llama mientras se tiene el cerrojo del torniquete: con solo el id, el notificador tendría que volver a tomarlo para armar el evento y la API se bloquearía.
+- Los métodos de `INotificador` reciben lo ya calculado (la vista o la entidad), no un id: se llaman con el cerrojo del torniquete tomado o justo después, y con solo el id el notificador tendría que volver a buscarlo; en el caso de `EstadoTorniqueteAsync`, la API se bloquearía. `SaldoActualizadoAsync` sigue con su firma hasta que Jeisy lo use.
 - **Dueños de entidades:** Alex es dueño de `Torniquete`, `PasoAutorizado`, `IntentoAcceso`, `Cruce` y `AlertaSeguridad`; Jeisy de `Cliente`, `Tarjeta`, `SoporteTarjeta`, `Recarga`, `Tarifa` y `Operador`. Cada uno escribe las migraciones de sus entidades; las migraciones se fusionan en orden, nunca dos a la vez sobre la misma rama.
 
 ---

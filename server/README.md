@@ -29,7 +29,8 @@ Mientras no hay base de datos, todo vive en memoria (`TransitGate.Api/Esqueleto`
 | `GET /api/torniquetes` | Estado y conexión de cada torniquete (sin sesión todavía) |
 | `GET /api/torniquetes/{id}/intentos` | Últimos 100 intentos de acceso (sin sesión todavía) |
 | Hub `/hubs/eventos` | Evento `EstadoTorniquete` en vivo al grupo `operacion` (sin sesión todavía) |
-| `POST /api/alertas/{id}/apagar-alarma` | Apaga la alarma (sin sesión todavía) |
+| `GET /api/alertas?estado=` | Alertas de colado, opcionalmente por estado (sin sesión todavía) |
+| `POST /api/alertas/{id}/apagar-alarma` | Apaga la alarma y deja la alerta Atendida (sin sesión todavía) |
 
 Tarjetas de prueba (sección `DatosDePrueba` de `appsettings.json`, tarifa 3.200):
 

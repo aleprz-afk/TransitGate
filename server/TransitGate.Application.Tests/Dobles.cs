@@ -1,9 +1,11 @@
 using Microsoft.Extensions.Logging.Abstractions;
 using TransitGate.Application.Accesos;
+using TransitGate.Application.Alertas;
 using TransitGate.Application.Cuentas;
 using TransitGate.Application.Notificaciones;
 using TransitGate.Application.Torniquetes;
 using TransitGate.Domain.Accesos;
+using TransitGate.Domain.Alertas;
 using TransitGate.Domain.Tarjetas;
 using TransitGate.Domain.Torniquetes;
 
@@ -115,11 +117,79 @@ internal sealed class NotificadorFalso : INotificador
 {
     public List<EstadoTorniqueteVista> Enviados { get; } = [];
 
+    public List<IntentoAcceso> Intentos { get; } = [];
+
+    public List<AlertaSeguridad> AlertasNuevas { get; } = [];
+
+    public List<AlertaSeguridad> AlertasActualizadas { get; } = [];
+
     public Task EstadoTorniqueteAsync(EstadoTorniqueteVista estado, CancellationToken ct = default)
     {
         Enviados.Add(estado);
         return Task.CompletedTask;
     }
+
+    public Task IntentoRegistradoAsync(IntentoAcceso intento, CancellationToken ct = default)
+    {
+        Intentos.Add(intento);
+        return Task.CompletedTask;
+    }
+
+    public Task AlertaNuevaAsync(AlertaSeguridad alerta, CancellationToken ct = default)
+    {
+        AlertasNuevas.Add(alerta);
+        return Task.CompletedTask;
+    }
+
+    public Task AlertaActualizadaAsync(AlertaSeguridad alerta, CancellationToken ct = default)
+    {
+        AlertasActualizadas.Add(alerta);
+        return Task.CompletedTask;
+    }
+}
+
+internal sealed class CrucesFalsos : ICruceRepositorio
+{
+    private long _ultimoId;
+
+    public List<Cruce> Guardados { get; } = [];
+
+    public Task<long> SiguienteIdAsync(CancellationToken ct = default) => Task.FromResult(++_ultimoId);
+
+    public Task AgregarAsync(Cruce cruce, CancellationToken ct = default)
+    {
+        Guardados.Add(cruce);
+        return Task.CompletedTask;
+    }
+
+    public Task<Cruce?> BuscarAsync(string torniqueteId, string sesionVision, long trackId, CancellationToken ct = default) =>
+        Task.FromResult(Guardados.FirstOrDefault(c =>
+            c.TorniqueteId == torniqueteId && c.SesionVision == sesionVision && c.TrackId == trackId));
+}
+
+internal sealed class AlertasFalsas : IAlertaRepositorio
+{
+    private long _ultimoId;
+
+    public List<AlertaSeguridad> Guardadas { get; } = [];
+
+    public Task<long> SiguienteIdAsync(CancellationToken ct = default) => Task.FromResult(++_ultimoId);
+
+    public Task AgregarAsync(AlertaSeguridad alerta, CancellationToken ct = default)
+    {
+        Guardadas.Add(alerta);
+        return Task.CompletedTask;
+    }
+
+    public Task<AlertaSeguridad?> ObtenerAsync(long alertaId, CancellationToken ct = default) =>
+        Task.FromResult(Guardadas.FirstOrDefault(a => a.Id == alertaId));
+
+    public Task<AlertaSeguridad?> AbiertaDeAsync(string torniqueteId, CancellationToken ct = default) =>
+        Task.FromResult(Guardadas.FirstOrDefault(a => a.TorniqueteId == torniqueteId && a.Estado == EstadoAlerta.Abierta));
+
+    public Task<IReadOnlyList<AlertaSeguridad>> ListarAsync(EstadoAlerta? estado, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<AlertaSeguridad>>(
+            [.. Guardadas.Where(a => estado is null || a.Estado == estado).OrderByDescending(a => a.Id)]);
 }
 
 internal sealed class RelojFijo(DateTime ahoraUtc) : TimeProvider

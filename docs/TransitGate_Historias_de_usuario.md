@@ -1,6 +1,8 @@
-# TransitGate — Historias de usuario (v1.1)
+# TransitGate — Historias de usuario (v1.2)
 
 Oct 10, 2026 · @alex
+
+**Cambios en v1.2 (14 oct 2026):** HU-22 CA1 — en el MVP la alerta también queda Atendida al apagar la alarma; lo que se deja para después es clasificarla.
 
 **Cambios en v1.1 (14 oct 2026):** se alinean seis criterios con el MVP, el contrato y el plan. HU-19 CA2, HU-22 CA2 y HU-34 CA2 quedan marcados para después del MVP o para la semana en que existe lo que necesitan. HU-19 CA3 pasa a decir lo que permite el contrato. HU-22 aclara qué pasa con la alerta en el MVP. HU-35 deja el 401 a HU-28, porque `X-Device-Key` está en modo tolerante hasta después del H1. HU-20 indica de dónde salen la hora del estado y la de la última señal (evento `EstadoTorniquete`).
 
@@ -261,7 +263,7 @@ Trazabilidad: RF-26, RF-28, RF-33 · RNF-06, RNF-07, RNF-08, RNF-26
 
 Como personal de seguridad, quiero apagar la sirena desde el panel, para devolver el torniquete a operación sin ir hasta él.
 
-- Dado un torniquete en Alarma, cuando pulso "Apagar alarma", entonces la sirena se apaga, el torniquete vuelve a Cerrado y la alerta queda Atendida con mi nombre y la hora. En el MVP, apagar la alarma también cierra la alerta; desde la semana 6 queda Atendida hasta que se clasifique (HU-23).
+- Dado un torniquete en Alarma, cuando pulso "Apagar alarma", entonces la sirena se apaga, el torniquete vuelve a Cerrado y la alerta queda Atendida con mi nombre y la hora. En el MVP no hace falta clasificarla después; clasificarla y dejarla Resuelta (HU-23) va en la semana 6. Quién la atendió se registra cuando exista Identity.
 - (Después del MVP; en el MVP un solo rol, Operador, hace taquilla y seguridad) Dado un operador de taquilla, cuando intenta apagarla, entonces no se le permite.
 
 Trazabilidad: RF-34, RF-06 · RNF-04, RNF-23
