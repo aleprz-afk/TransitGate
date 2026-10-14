@@ -1,5 +1,9 @@
 @host = http://localhost:5000
 @tq = tq_1
+# Claves de los dispositivos: pon aquí las que tengas en tus secretos de usuario, pero no las subas al repo.
+# Mientras Dispositivos:ExigirClave esté en false, cualquier valor sirve.
+@claveEsp32 = sin-clave
+@claveVision = sin-clave
 
 GET {{host}}/api/salud
 
@@ -7,6 +11,7 @@ GET {{host}}/api/salud
 # Lectura que abre. Si repites el mismo lecturaId recibes la misma respuesta (RF-18 CA4).
 POST {{host}}/api/torniquetes/{{tq}}/lecturas
 Content-Type: application/json
+X-Device-Key: {{claveEsp32}}
 
 { "lecturaId": "a1f3-{{$randomInt 1000 9999}}", "tipo": "uid", "valor": "04A1B2C3" }
 
@@ -14,6 +19,7 @@ Content-Type: application/json
 # Lectura rechazada: UID de prueba con saldo insuficiente
 POST {{host}}/api/torniquetes/{{tq}}/lecturas
 Content-Type: application/json
+X-Device-Key: {{claveEsp32}}
 
 { "lecturaId": "a1f3-{{$randomInt 1000 9999}}", "tipo": "uid", "valor": "DEADBEEF" }
 
@@ -21,6 +27,7 @@ Content-Type: application/json
 # Latido del ESP32: devuelve el estado deseado
 POST {{host}}/api/torniquetes/{{tq}}/latido
 Content-Type: application/json
+X-Device-Key: {{claveEsp32}}
 
 { "brazoReal": "cerrado", "sirenaReal": false, "pasoIdAbierto": null, "arranque": "a1f3", "fw": "0.1.0" }
 
@@ -28,6 +35,7 @@ Content-Type: application/json
 # Cruce de entrada con la hora actual: consume el paso si hay uno pendiente; si no, es fraude
 POST {{host}}/api/torniquetes/{{tq}}/cruces
 Content-Type: application/json
+X-Device-Key: {{claveVision}}
 
 { "trackId": {{$randomInt 1 1000000}}, "sesionVision": "v-prueba", "sentido": "entrada", "horaFotograma": "{{$datetime iso8601}}" }
 
@@ -35,8 +43,17 @@ Content-Type: application/json
 # Latido del servicio de visión
 POST {{host}}/api/torniquetes/{{tq}}/vision/latido
 Content-Type: application/json
+X-Device-Key: {{claveVision}}
 
 { "fps": 14.8, "sesionVision": "v-prueba" }
+
+###
+# Estado y conexión de los torniquetes
+GET {{host}}/api/torniquetes
+
+###
+# Historial de intentos
+GET {{host}}/api/torniquetes/{{tq}}/intentos
 
 ###
 # Apagar la alarma (el id sale de la respuesta "fraude")
