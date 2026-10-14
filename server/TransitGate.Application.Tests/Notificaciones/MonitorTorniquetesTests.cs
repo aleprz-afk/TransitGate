@@ -34,12 +34,14 @@ public class MonitorTorniquetesTests
         await _monitor.RevisarAsync();
 
         var publicado = Assert.Single(_notificador.Enviados);
-        Assert.Equal(new EstadoTorniqueteVista("tq_1", EstadoTorniquete.Cerrado, false, false, false), publicado);
+        Assert.Equal(
+            new EstadoTorniqueteVista("tq_1", EstadoTorniquete.Cerrado, null, false, null, false, false),
+            publicado);
         Assert.Equal(publicado, Assert.Single(_monitor.UltimosPublicados));
     }
 
-    [Fact] // RF-37, S14
-    public async Task Publica_cuando_el_esp32_se_conecta_y_cuando_deja_de_enviar_latidos()
+    [Fact] // RF-37, S14, HU-20 CA3
+    public async Task Publica_cuando_el_esp32_se_conecta_y_cuando_deja_de_enviar_latidos_con_su_ultima_senal()
     {
         _torniquete.RegistrarLatidoEsp32(T0, Cerrado, null, "a1f3");
         await _monitor.RevisarAsync();
@@ -48,6 +50,33 @@ public class MonitorTorniquetesTests
         await _monitor.RevisarAsync();
 
         Assert.Equal([true, false], _notificador.Enviados.Select(e => e.Esp32Conectado));
+        Assert.Equal(T0, _notificador.Enviados[1].UltimaSenal);
+    }
+
+    [Fact] // la última señal cambia en cada latido: sola no justifica un evento
+    public async Task Un_latido_nuevo_no_publica_pero_actualiza_lo_que_ve_quien_se_conecta()
+    {
+        _torniquete.RegistrarLatidoEsp32(T0, Cerrado, null, "a1f3");
+        await _monitor.RevisarAsync();
+
+        Avanzar(0.3);
+        _torniquete.RegistrarLatidoEsp32(_reloj.Ahora, Cerrado, null, "a1f3");
+        await _monitor.RevisarAsync();
+
+        Assert.Single(_notificador.Enviados);
+        Assert.Equal(_reloj.Ahora, Assert.Single(_monitor.UltimosPublicados).UltimaSenal);
+    }
+
+    [Fact] // HU-20 CA2
+    public async Task El_evento_dice_desde_cuando_el_torniquete_esta_en_alarma()
+    {
+        _torniquete.RegistrarCruce(SentidoCruce.Entrada, T0, T0);
+
+        await _monitor.RevisarAsync();
+
+        var publicado = Assert.Single(_notificador.Enviados);
+        Assert.Equal(EstadoTorniquete.Alarma, publicado.Estado);
+        Assert.Equal(T0, publicado.EstadoDesde);
     }
 
     [Fact] // RF-30, S14

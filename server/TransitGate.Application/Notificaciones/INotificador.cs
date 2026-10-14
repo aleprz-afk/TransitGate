@@ -6,7 +6,9 @@ namespace TransitGate.Application.Notificaciones;
 public sealed record EstadoTorniqueteVista(
     string TorniqueteId,
     EstadoTorniquete Estado,
+    DateTime? EstadoDesde,
     bool Esp32Conectado,
+    DateTime? UltimaSenal,
     bool VisionConectada,
     bool Desincronizado);
 
