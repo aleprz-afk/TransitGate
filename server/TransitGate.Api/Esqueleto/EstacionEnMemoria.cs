@@ -1,142 +1,92 @@
-using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
 using TransitGate.Api.Contratos;
-using TransitGate.Domain.Accesos;
+using TransitGate.Application.Torniquetes;
 using TransitGate.Domain.Torniquetes;
 
 namespace TransitGate.Api.Esqueleto;
 
 /// <summary>
-/// API esqueleto de la semana 1: el torniquete semilla vive en memoria y usa la máquina de estados
-/// real del dominio, pero no hay base de datos, ni tarjetas reales, y el saldo es fijo.
-/// Sirve para que el firmware (sim-esp32) y la visión (sim-vision) prueben el contrato desde ya.
-/// En la semana 2 lo reemplazan los casos de uso de Application con ISoporteResolver e ISaldoService (C7).
+/// Lo que queda del esqueleto de la semana 1: cruces y alertas en memoria, sobre el mismo torniquete que
+/// usan ValidarLectura y ProcesarLatido. Pasan a casos de uso de Application en las semanas 4 (cruces)
+/// y 5 (AlertaSeguridad).
 /// </summary>
-public sealed class EstacionEnMemoria(TimeProvider reloj, IOptionsMonitor<OpcionesOperacion> opciones)
+public sealed class EstacionEnMemoria(
+    ITorniqueteRepositorio torniquetes,
+    CerrojoTorniquetes cerrojo,
+    BitacoraTorniquete bitacora,
+    TimeProvider reloj)
 {
-    public const string TorniqueteSemilla = "tq_1";
-
-    private const int SaldoFijo = 8800;
-
-    /// <summary>UIDs para provocar rechazos desde sim-esp32; cualquier otro UID válido abre.</summary>
-    public static readonly IReadOnlyDictionary<string, MotivoIntento> UidsDeRechazo = new Dictionary<string, MotivoIntento>
-    {
-        ["00000000"] = MotivoIntento.TarjetaNoRegistrada,
-        ["DEADBEEF"] = MotivoIntento.SaldoInsuficiente,
-    };
-
-    // El celular es Fase 4: por ahora el latido trae siempre el desafío del vector de prueba de C2 (16 bytes en 0).
-    private static readonly DesafioLatido DesafioFijo = new("d_esqueleto", new string('0', 32), 30);
-
-    private readonly Lock _cerrojo = new();
-    private readonly Dictionary<string, Torniquete> _torniquetes = new()
-    {
-        [TorniqueteSemilla] = new Torniquete(TorniqueteSemilla, "Torniquete 1"),
-    };
-    private readonly Dictionary<(string Torniquete, string LecturaId), RespuestaLectura> _lecturas = [];
-    private readonly HashSet<(string Torniquete, string SesionVision, long TrackId)> _cruces = [];
-    private readonly Dictionary<string, AlertaEnMemoria> _alertas = [];
-    private long _ultimoPasoId;
+    private readonly ConcurrentDictionary<(string Torniquete, string SesionVision, long TrackId), byte> _cruces = new();
+    private readonly ConcurrentDictionary<string, AlertaEnMemoria> _alertas = new();
     private int _ultimaAlertaId;
 
-    public bool Existe(string torniqueteId) => _torniquetes.ContainsKey(torniqueteId);
-
-    public RespuestaLectura RecibirLectura(string torniqueteId, string lecturaId, string uid)
+    /// <summary>Devuelve null si el torniquete no existe.</summary>
+    public async Task<RespuestaCruce?> RegistrarCruceAsync(
+        string torniqueteId,
+        string sesionVision,
+        long trackId,
+        SentidoCruce sentido,
+        DateTime horaFotograma,
+        CancellationToken ct = default)
     {
-        lock (_cerrojo)
+        var llegada = Ahora();
+        if (await torniquetes.ObtenerAsync(torniqueteId, ct) is not { } torniquete)
+            return null;
+
+        using (await cerrojo.TomarAsync(torniqueteId, ct))
         {
-            // RF-18 CA4: un reintento con el mismo lecturaId recibe la misma respuesta y no cobra otra vez.
-            if (_lecturas.TryGetValue((torniqueteId, lecturaId), out var previa))
-                return previa;
-
-            var torniquete = _torniquetes[torniqueteId];
-            var ahora = Ahora();
-            torniquete.ActualizarPorTiempo(ahora);
-
-            RespuestaLectura respuesta;
-            if (torniquete.MotivoNoDisponible is { } motivoTorniquete)
-            {
-                respuesta = RespuestaLectura.Denegar(motivoTorniquete);
-            }
-            else if (UidsDeRechazo.TryGetValue(uid, out var motivoTarjeta))
-            {
-                respuesta = RespuestaLectura.Denegar(motivoTarjeta);
-            }
-            else
-            {
-                var opcionesActuales = opciones.CurrentValue;
-                var paso = torniquete.AutorizarPaso(
-                    ++_ultimoPasoId,
-                    ahora,
-                    TimeSpan.FromSeconds(opcionesActuales.ExpiracionPasoSegundos),
-                    TimeSpan.FromMilliseconds(opcionesActuales.GraciaVisionMs));
-                respuesta = RespuestaLectura.Abrir(paso.Id, SaldoFijo);
-            }
-
-            _lecturas[(torniqueteId, lecturaId)] = respuesta;
+            var respuesta = Evaluar(torniquete, sesionVision, trackId, sentido, horaFotograma);
+            bitacora.Cruce(torniqueteId, trackId, sentido, horaFotograma, llegada, respuesta.Resultado);
             return respuesta;
         }
     }
 
-    public RespuestaLatido Latido(string torniqueteId)
-    {
-        lock (_cerrojo)
-        {
-            var torniquete = _torniquetes[torniqueteId];
-            torniquete.ActualizarPorTiempo(Ahora());
-
-            return new RespuestaLatido(
-                BrazoDeseado: torniquete.BrazoDeseadoAbierto ? "abierto" : "cerrado",
-                SirenaDeseada: torniquete.SirenaDeseada,
-                PasoId: torniquete.PasoPendiente?.Id,
-                ModoRegistro: torniquete.Estado == EstadoTorniquete.ModoRegistro,
-                Desafio: DesafioFijo);
-        }
-    }
-
-    public RespuestaCruce RegistrarCruce(
-        string torniqueteId, string sesionVision, long trackId, SentidoCruce sentido, DateTime horaFotograma)
-    {
-        lock (_cerrojo)
-        {
-            // RF-26 CA3: sesionVision + trackId es la clave de idempotencia.
-            if (!_cruces.Add((torniqueteId, sesionVision, trackId)))
-                return RespuestaCruce.Duplicado;
-
-            var resultado = _torniquetes[torniqueteId].RegistrarCruce(sentido, horaFotograma, Ahora());
-
-            return resultado.Tipo switch
-            {
-                TipoResultadoCruce.Consumido => RespuestaCruce.Consumido(resultado.Paso!.Id),
-                TipoResultadoCruce.Fraude => RespuestaCruce.Fraude(
-                    resultado.AlertaNueva ? CrearAlerta(torniqueteId) : AlertaAbierta(torniqueteId)),
-                _ => RespuestaCruce.Registrado,
-            };
-        }
-    }
-
     /// <summary>Devuelve false si la alerta no existe. En el MVP, apagar la alarma también cierra la alerta.</summary>
-    public bool ApagarAlarma(string alertaId)
+    public async Task<bool> ApagarAlarmaAsync(string alertaId, CancellationToken ct = default)
     {
-        lock (_cerrojo)
-        {
-            if (!_alertas.TryGetValue(alertaId, out var alerta))
-                return false;
+        if (!_alertas.TryGetValue(alertaId, out var alerta))
+            return false;
 
+        using (await cerrojo.TomarAsync(alerta.TorniqueteId, ct))
+        {
             if (alerta.Abierta)
             {
-                _torniquetes[alerta.TorniqueteId].ApagarAlarma();
+                var torniquete = await torniquetes.ObtenerAsync(alerta.TorniqueteId, ct);
+                var antes = torniquete!.Deseado;
+                torniquete.ApagarAlarma(Ahora());
                 alerta.Abierta = false;
+                bitacora.SiCambioElDeseado(torniquete, antes, "apagar-alarma");
             }
-
-            return true;
         }
+
+        return true;
+    }
+
+    private RespuestaCruce Evaluar(
+        Torniquete torniquete, string sesionVision, long trackId, SentidoCruce sentido, DateTime horaFotograma)
+    {
+        // RF-26 CA3: sesionVision + trackId es la clave de idempotencia.
+        if (!_cruces.TryAdd((torniquete.Id, sesionVision, trackId), 0))
+            return RespuestaCruce.Duplicado;
+
+        var antes = torniquete.Deseado;
+        var resultado = torniquete.RegistrarCruce(sentido, horaFotograma, Ahora());
+        bitacora.SiCambioElDeseado(torniquete, antes, "cruce");
+
+        return resultado.Tipo switch
+        {
+            TipoResultadoCruce.Consumido => RespuestaCruce.Consumido(resultado.Paso!.Id),
+            TipoResultadoCruce.Fraude => RespuestaCruce.Fraude(
+                resultado.AlertaNueva ? CrearAlerta(torniquete.Id) : AlertaAbierta(torniquete.Id)),
+            _ => RespuestaCruce.Registrado,
+        };
     }
 
     private DateTime Ahora() => reloj.GetUtcNow().UtcDateTime;
 
     private string CrearAlerta(string torniqueteId)
     {
-        var alertaId = $"al_{++_ultimaAlertaId}";
+        var alertaId = $"al_{Interlocked.Increment(ref _ultimaAlertaId)}";
         _alertas[alertaId] = new AlertaEnMemoria(torniqueteId);
         return alertaId;
     }

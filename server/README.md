@@ -14,23 +14,39 @@ La API escucha en `http://0.0.0.0:5000` (contratos de integración §9), así qu
 - Documentación (Scalar): `http://localhost:5000/scalar`
 - Pruebas: `dotnet test`
 
-## API esqueleto (semana 1)
+## Estado actual (semana 2)
 
-Las rutas de los dispositivos siguen el Contrato API v1.1 (§6 y §7) y ya usan la máquina de estados del torniquete (`TransitGate.Domain/Torniquetes`), pero todo vive en memoria: un solo torniquete `tq_1`, sin base de datos, sin `X-Device-Key` y con saldo fijo de 8.800. Al reiniciar la API se pierde el estado.
+Las rutas de los dispositivos siguen el Contrato API v1.1 (§6 y §7). La lectura ya pasa por el caso de uso `ValidarLectura` (Application), que valida torniquete, soporte y saldo en el orden de RF-20 a través del contrato C7 (`ISoporteResolver`, `ISaldoService`).
+
+Mientras no hay base de datos, todo vive en memoria (`TransitGate.Api/Esqueleto`): un solo torniquete `tq_1`, sin `X-Device-Key`, y al reiniciar la API se pierde el estado. Para pasar a la base de datos se cambia `AddEsqueletoEnMemoria` en `Program.cs`.
 
 | Ruta | Qué hace hoy |
 | --- | --- |
-| `POST /api/torniquetes/{id}/lecturas` | Abre con cualquier UID válido; repite la respuesta si llega el mismo `lecturaId` |
-| `POST /api/torniquetes/{id}/latido` | Devuelve el estado deseado real (brazo, sirena, paso pendiente) y un desafío fijo |
+| `POST /api/torniquetes/{id}/lecturas` | Valida contra las tarjetas de prueba, debita la tarifa y abre un paso; repite la respuesta si llega el mismo `lecturaId` |
+| `POST /api/torniquetes/{id}/latido` | Registra la señal de vida y confirma la apertura (`pasoIdAbierto`); devuelve el estado deseado y un desafío fijo |
 | `POST /api/torniquetes/{id}/cruces` | Consume el paso, marca fraude o responde `duplicado` |
-| `POST /api/torniquetes/{id}/vision/latido` | Responde 204 |
+| `POST /api/torniquetes/{id}/vision/latido` | Registra la señal de vida de la visión; responde 204 |
+| `GET /api/torniquetes` | Estado y conexión de cada torniquete (sin sesión todavía) |
 | `POST /api/alertas/{id}/apagar-alarma` | Apaga la alarma (sin sesión todavía) |
 
-UIDs de prueba para los rechazos:
+Tarjetas de prueba (sección `DatosDePrueba` de `appsettings.json`, tarifa 3.200):
 
-| UID | Respuesta |
-| --- | --- |
-| `00000000` | `denegar`, `TarjetaNoRegistrada` |
-| `DEADBEEF` | `denegar`, `SaldoInsuficiente` |
+| UID | Estado | Saldo | Respuesta |
+| --- | --- | --- | --- |
+| `04A1B2C3` | Activa | 12.000 | Abre tres veces y luego `SaldoInsuficiente` |
+| `DEADBEEF` | Activa | 2.000 | `SaldoInsuficiente` |
+| `0BADCAFE` | Bloqueada | 50.000 | `SoporteBloqueado` |
+| `5011C17A` | Entregada | 0 | `SoporteNoActivo` |
+| cualquier otro | — | — | `TarjetaNoRegistrada` |
 
-Los tiempos (expiración del paso y gracia de visión) están en la sección `Operacion` de `appsettings.json`.
+Para probar con una tarjeta real, agrega su UID a esa lista. Los tiempos (expiración del paso, gracia de visión y plazo de conexión del ESP32) están en la sección `Operacion`.
+
+## Mediciones
+
+El log sale una línea por evento con hora UTC al milisegundo. Las líneas que empiezan con `RNF-04` registran cada cambio del estado deseado y las que empiezan con `RNF-06`, cada cruce con su retraso. Para guardar el log de una sesión de pruebas (PowerShell):
+
+```
+dotnet run --project TransitGate.Api | Tee-Object -FilePath mediciones.log
+```
+
+Lo que cambió y lo que necesita saber cada integrante está en [CAMBIOS.md](CAMBIOS.md).

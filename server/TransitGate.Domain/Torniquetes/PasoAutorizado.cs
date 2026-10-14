@@ -29,6 +29,11 @@ public class PasoAutorizado
     /// <summary>Hora del fotograma del cruce que consumió el paso (RF-27 CA2).</summary>
     public DateTime? HoraCruce { get; private set; }
 
+    /// <summary>Cuándo reportó el ESP32 el brazo abierto para este paso (RF-22 CA4); sin ella aplica RF-46.</summary>
+    public DateTime? AperturaConfirmadaEn { get; private set; }
+
+    internal void ConfirmarApertura(DateTime ahora) => AperturaConfirmadaEn ??= ahora;
+
     internal bool AdmiteCruce(DateTime horaFotograma) =>
         horaFotograma >= AutorizadoEn && horaFotograma <= FinVentana;
 
