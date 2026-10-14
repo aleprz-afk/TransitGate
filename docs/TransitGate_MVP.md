@@ -1,4 +1,6 @@
-# TransitGate — Producto mínimo viable (MVP) (v1.1)
+# TransitGate — Producto mínimo viable (MVP) (v1.2)
+
+**Cambios en v1.2 (14 oct 2026):** apagar la alarma deja la alerta Atendida, como pide HU-22, en lugar de cerrarla (sección 3.1).
 
 **Cambios en v1.1 (14 oct 2026):** las claves de dispositivo de los datos semilla van en los secretos de usuario y no en el repositorio (sección 3.3); se agrega el riesgo de que la base de datos (PostgreSQL en Docker, en la laptop servidor) no esté arriba en la demo (sección 8).
 
@@ -41,7 +43,7 @@ De los 33 RF Must, el MVP incluye 28. Los 5 restantes son Must de la entrega fin
 | Saldo | RF-15, RF-16 | — |
 | Validación de acceso | RF-18, RF-20, RF-21, RF-22, RF-23, RF-25, RF-45 | El firmware ya deja listo el SELECT AID (RF-18 CA5), pero sin app no se usa |
 | Detección de colados | RF-26, RF-27, RF-28, RF-29 | Gracia de visión fija en 1 s hasta que se mida (S13) |
-| Monitoreo | RF-31, RF-32, RF-33, RF-34, RF-36 | Historial de intentos sin filtros; apagar la alarma también cierra la alerta |
+| Monitoreo | RF-31, RF-32, RF-33, RF-34, RF-36 | Historial de intentos sin filtros; apagar la alarma deja la alerta Atendida y no hace falta clasificarla (RF-35 va en la entrega final) |
 | Historial del cliente | RF-39 | Lista simple, sin paginación |
 
 ### 3.2 Después del MVP (entrega final)

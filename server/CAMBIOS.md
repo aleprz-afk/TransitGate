@@ -1,6 +1,6 @@
 # Cambios del servidor: validación y torniquete
 
-Responsable: Alex · Última actualización: 14 de octubre de 2026 · Todo está en `main` (hasta el PR #9). Los contratos están en `docs/`: Contrato de la API v1.2 y Contratos de integración v1.3
+Responsable: Alex · Última actualización: 14 de octubre de 2026 · Todo está en `main` hasta el PR #9; en curso: `feat/cruces-y-alertas`. Los contratos están en `docs/`: Contrato de la API v1.2 y Contratos de integración v1.4
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -14,7 +14,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - El hub de SignalR `/hubs/eventos` envía `EstadoTorniquete` en vivo: estado, conexión del ESP32 y de la visión, y desincronización.
 - Todo vive en memoria hasta que esté la base de datos (PostgreSQL en Docker, ver "Decisiones"): **al reiniciar la API se pierde el estado**.
 - El ESP32 y la visión se identifican con la cabecera `X-Device-Key`. Por ahora en **modo tolerante**: no se rechaza nada, solo queda en el log.
-- Hay 66 pruebas automatizadas (dominio y casos de uso), una por criterio de aceptación.
+- Hay 80 pruebas automatizadas (dominio y casos de uso), una por criterio de aceptación.
 
 ## Decisiones
 
@@ -121,9 +121,23 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
   await conexion.start();
   ```
 
+- **Más eventos en el grupo `operacion`**, con el contenido del contrato C6:
+
+  ```json
+  IntentoRegistrado { "intentoId": 3, "torniqueteId": "tq_1", "resultado": "Exitoso|Rechazado|Fraude",
+                      "motivo": "SaldoInsuficiente", "fecha": "…" }
+  AlertaNueva       { "alertaId": "al_1", "torniqueteId": "tq_1", "tipo": "FraudeSinValidacion", "fecha": "…" }
+  AlertaActualizada { "alertaId": "al_1", "estado": "Atendida" }
+  ```
+
+  - `IntentoRegistrado` llega con cada lectura y con cada colado, para agregar el intento al inicio de la lista sin recargar (HU-19 CA1). `motivo` es `null` en los exitosos.
+  - `AlertaNueva` llega solo con el primer colado; los siguientes, mientras la alarma suena, se suman a la misma alerta y llegan solo como `IntentoRegistrado` de fraude (HU-21 CA3).
+  - `AlertaActualizada` llega al apagar la alarma.
+
 - `GET /api/torniquetes` devuelve `[{ id, nombre, estado, conectado, ultimaSenal }]` (Contrato §8), útil para la carga inicial.
 - `GET /api/torniquetes/{id}/intentos` devuelve los últimos 100 intentos, del más reciente al más antiguo: `[{ intentoId, resultado, motivo, fecha }]` (Contrato §8, RF-32). `resultado` es `Exitoso`, `Rechazado` o `Fraude`; `motivo` no viene en los exitosos. Todavía no acepta `desde` ni `hasta`.
-- `POST /api/alertas/{alertaId}/apagar-alarma` apaga la alarma y cierra la alerta.
+- `GET /api/alertas?estado=Abierta` devuelve `[{ alertaId, torniqueteId, estado, fecha }]`, las más recientes primero (RF-33); sin `estado` devuelve todas. Un estado que no sea `Abierta`, `Atendida` o `Resuelta` recibe 400.
+- `POST /api/alertas/{alertaId}/apagar-alarma` apaga la alarma: el torniquete vuelve a `Cerrado` y la alerta queda `Atendida` (HU-22 CA1). Para el MVP con eso basta; clasificarla y dejarla `Resuelta` (RF-35) va en la entrega final. Apagar una alarma ya apagada responde 200 sin hacer nada.
 - Estas rutas funcionan **sin sesión** por ahora; exigirán sesión de operador cuando esté Identity.
 - El OpenAPI para generar los tipos TypeScript está en `http://<IP>:5000/openapi/v1.json`.
 
@@ -193,13 +207,20 @@ dotnet run --project TransitGate.Api | Tee-Object -FilePath mediciones.log
 | `X-Device-Key` en modo tolerante | Se activa el modo estricto después del H1 (semana 3) |
 | Las rutas del panel no piden sesión | Con Identity (Jeisy, semana 3) |
 | La transacción del paso (RNF-15) está definida pero en memoria no se deshace nada si algo falla a la mitad | Cuando esté la base de datos; ahí se agrega la prueba con fallo forzado |
-| Los cruces de fraude todavía no dejan un `IntentoAcceso` con resultado `Fraude` (RF-28 CA1) | Semana 4, cuando los cruces pasen a Application |
 | Una lectura en modo registro se rechazaría como `TorniqueteOcupado` y dejaría un intento (RF-23 CA3 pide que no deje ninguno) | Semana 4, con la ruta del modo registro |
 | No se revierte el débito si el brazo no abre (RF-46) | Semana 6 |
-| SignalR solo envía `EstadoTorniquete`; faltan `IntentoRegistrado`, `AlertaNueva`, `SaldoActualizado` y los demás | Semanas 3 a 5, junto con cada entidad |
+| SignalR todavía no envía los eventos del cliente (`SaldoActualizado`, `EventoViaje`) ni `SolicitudNueva` | Con Identity y las tarjetas de Jeisy (semanas 3 y 4) |
+| Quién apagó la alarma no queda registrado (HU-22 CA1 pide "con mi nombre") | Con Identity (semana 3) |
 | Modo registro sin ruta todavía; el desafío del celular es fijo | Semanas 4 y Fase 4 |
 
 ## Historial
+
+**14 de octubre (semana 2), segunda parte**
+- Cruces y alertas pasan a casos de uso de Application: cada cruce queda registrado (RF-26 CA1); un colado abre una `AlertaSeguridad` o se suma a la abierta, y deja un `IntentoAcceso` de fraude (RF-28).
+- Apagar la alarma deja la alerta `Atendida` (RF-34).
+- `GET /api/alertas?estado=` (RF-33).
+- Eventos `IntentoRegistrado`, `AlertaNueva` y `AlertaActualizada` para el panel.
+- Ya no queda lógica en el esqueleto: en `TransitGate.Api/Esqueleto` solo quedan los almacenes en memoria.
 
 **14 de octubre (semana 2)**
 - `X-Device-Key` en las rutas del ESP32 y de la visión (RNF-20), en modo tolerante hasta después del H1. Una clave por dispositivo y por torniquete, en los secretos de usuario.
