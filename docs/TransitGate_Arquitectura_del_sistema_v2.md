@@ -211,7 +211,7 @@ Cada validación exitosa crea un `PasoAutorizado` en estado `Pendiente`, que pas
 Las decisiones pendientes de la versión anterior ya se resolvieron:
 
 - **WiFi/servidor caído, soportes por cliente, tarifa:** resueltos como supuestos S1–S3 en los requisitos funcionales v2.
-- **Contrato de la API:** rutas y formato JSON entre ESP32, servicio de visión y servidor — ver [`TransitGate_Contrato_API.pdf`](./TransitGate_Contrato_API.pdf). Las interfaces que no son HTTP (APDU, stream, pines, configuración, SignalR y simuladores) están en [`TransitGate_Contratos_de_integracion.md`](./TransitGate_Contratos_de_integracion.md).
+- **Contrato de la API:** rutas y formato JSON entre ESP32, servicio de visión y servidor — ver [`TransitGate_Contrato_API.md`](./TransitGate_Contrato_API.md). Las interfaces que no son HTTP (APDU, stream, pines, configuración, SignalR y simuladores) están en [`TransitGate_Contratos_de_integracion.md`](./TransitGate_Contratos_de_integracion.md).
 - **Red WiFi:**
   - **Demo:** hotspot o router de un amigo, WiFi de 2,4 GHz con WPA2-Personal (RNF-36), laptop con IP fija dentro de esa red.
   - **Desarrollo:** por ahora la red de esta PC; los datos (SSID, contraseña, IP) se agregan al `config.json` del firmware cuando arranque la programación (Fase 1).
