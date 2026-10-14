@@ -93,7 +93,7 @@ Se verifican en el MVP los que protegen la demo y los que el profesor podría re
 | Lector PN532 | Comprado |
 | Servo para el brazo | Por confirmar |
 | Sirena y su módulo relé o transistor | Sirena disponible; módulo por confirmar |
-| Tarjetas MIFARE Classic 1K (al menos 3) y NTAG213/215 (al menos 1) | Por comprar |
+| Tarjetas MIFARE Classic 1K (al menos 3) y NTAG213/215 (al menos 1) | 2 MIFARE Classic 1K (tarjeta S50 y llavero, venían con el PN532); faltan 1 MIFARE de repuesto y 1 NTAG213/215 (RNF-35, entrega final) |
 | Fuente de 5 V ≥ 2 A para la cámara y fuente aparte para el servo | Por confirmar |
 | Maqueta del torniquete con soporte cenital para la cámara | Por construir |
 | Laptop de un amigo para la red de la demo (2,4 GHz) | Disponible |
