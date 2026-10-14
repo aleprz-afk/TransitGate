@@ -1,6 +1,7 @@
 using System.Text.Json.Serialization;
 using TransitGate.Application.Torniquetes;
 using TransitGate.Domain.Accesos;
+using TransitGate.Domain.Alertas;
 
 namespace TransitGate.Api.Contratos;
 
@@ -10,6 +11,12 @@ public record TorniqueteResumen(string Id, string Nombre, string Estado, bool Co
 {
     public static TorniqueteResumen Desde(ResumenTorniquete resumen) => new(
         resumen.Id, resumen.Nombre, resumen.Estado.ToString(), resumen.Conectado, resumen.UltimaSenal);
+}
+
+public record AlertaResumen(string AlertaId, string TorniqueteId, string Estado, DateTime Fecha)
+{
+    public static AlertaResumen Desde(AlertaSeguridad alerta) => new(
+        IdsPublicos.Alerta(alerta.Id), alerta.TorniqueteId, alerta.Estado.ToString(), alerta.Fecha);
 }
 
 /// <summary>Un intento del historial del panel (RF-32). Sin UID ni datos del cliente (RNF-27).</summary>

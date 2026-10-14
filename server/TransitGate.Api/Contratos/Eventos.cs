@@ -1,4 +1,6 @@
 using TransitGate.Application.Notificaciones;
+using TransitGate.Domain.Accesos;
+using TransitGate.Domain.Alertas;
 
 namespace TransitGate.Api.Contratos;
 
@@ -25,4 +27,23 @@ public record EstadoTorniqueteEvento(
         vista.UltimaSenal,
         vista.VisionConectada,
         vista.Desincronizado);
+}
+
+/// <summary>motivo es null en un intento exitoso. Sin datos del cliente ni UID (RNF-27).</summary>
+public record IntentoRegistradoEvento(long IntentoId, string TorniqueteId, string Resultado, string? Motivo, DateTime Fecha)
+{
+    public static IntentoRegistradoEvento Desde(IntentoAcceso intento) => new(
+        intento.Id, intento.TorniqueteId, intento.Resultado.ToString(), intento.Motivo?.ToString(), intento.Fecha);
+}
+
+public record AlertaNuevaEvento(string AlertaId, string TorniqueteId, string Tipo, DateTime Fecha)
+{
+    public static AlertaNuevaEvento Desde(AlertaSeguridad alerta) => new(
+        IdsPublicos.Alerta(alerta.Id), alerta.TorniqueteId, alerta.Tipo.ToString(), alerta.Fecha);
+}
+
+public record AlertaActualizadaEvento(string AlertaId, string Estado)
+{
+    public static AlertaActualizadaEvento Desde(AlertaSeguridad alerta) => new(
+        IdsPublicos.Alerta(alerta.Id), alerta.Estado.ToString());
 }

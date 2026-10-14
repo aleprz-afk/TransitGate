@@ -1,5 +1,6 @@
 using TransitGate.Application.Accesos;
 using TransitGate.Application.Cuentas;
+using TransitGate.Application.Notificaciones;
 using TransitGate.Application.Torniquetes;
 using TransitGate.Domain.Accesos;
 using TransitGate.Domain.Tarjetas;
@@ -18,6 +19,7 @@ public sealed class ValidarLectura(
     ISoporteResolver soportes,
     ISaldoService saldos,
     IUnidadDeTrabajo unidadDeTrabajo,
+    INotificador notificador,
     IParametrosOperacion parametros,
     CerrojoTorniquetes cerrojo,
     BitacoraTorniquete bitacora,
@@ -30,6 +32,7 @@ public sealed class ValidarLectura(
         if (await torniquetes.ObtenerAsync(torniqueteId, ct) is not { } torniquete)
             return null;
 
+        IntentoAcceso intento;
         using (await cerrojo.TomarAsync(torniqueteId, ct))
         {
             // RF-18 CA4: un reintento con el mismo lecturaId recibe la misma respuesta y no cobra otra vez.
@@ -39,15 +42,18 @@ public sealed class ValidarLectura(
             var lectura = new Lectura(torniqueteId, lecturaId, uidHex, reloj.GetUtcNow().UtcDateTime);
             var antes = torniquete.Deseado;
 
-            var intento = await DecidirAsync(torniquete, lectura, ct);
+            intento = await DecidirAsync(torniquete, lectura, ct);
             await intentos.AgregarAsync(intento, ct);
             await unidadDeTrabajo.GuardarCambiosAsync(ct);
 
-            var resultado = ResultadoLectura.Desde(intento);
             bitacora.SiCambioElDeseado(torniquete, antes, "lectura");
-            bitacora.Lectura(torniqueteId, lecturaId, uidHex, resultado.Autorizado ? "abrir" : $"{resultado.Motivo}", lectura.Fecha);
-            return resultado;
+            bitacora.Lectura(
+                torniqueteId, lecturaId, uidHex, intento.Motivo?.ToString() ?? "abrir", lectura.Fecha);
         }
+
+        // Fuera del cerrojo: avisar al panel no debe demorar la respuesta al ESP32 de la siguiente lectura.
+        await notificador.IntentoRegistradoAsync(intento, ct);
+        return ResultadoLectura.Desde(intento);
     }
 
     private async Task<IntentoAcceso> DecidirAsync(Torniquete torniquete, Lectura lectura, CancellationToken ct)

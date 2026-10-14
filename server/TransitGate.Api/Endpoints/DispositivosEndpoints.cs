@@ -1,12 +1,13 @@
 using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http.HttpResults;
 using TransitGate.Api.Contratos;
-using TransitGate.Api.Esqueleto;
 using TransitGate.Api.Seguridad;
 using TransitGate.Application.Accesos;
+using TransitGate.Application.Alertas;
 using TransitGate.Application.Dispositivos;
 using TransitGate.Application.Torniquetes;
 using TransitGate.Application.Validacion;
+using TransitGate.Domain.Alertas;
 using TransitGate.Domain.Torniquetes;
 
 namespace TransitGate.Api.Endpoints;
@@ -37,8 +38,10 @@ public static partial class DispositivosEndpoints
             .WithSummary("Estado y conexión de los torniquetes (RF-31, RF-37). Sin sesión hasta que exista Identity");
         monitoreo.MapGet("/torniquetes/{id}/intentos", ListarIntentos)
             .WithSummary("Últimos 100 intentos de acceso, sin filtros todavía (RF-32). Sin sesión hasta que exista Identity");
+        monitoreo.MapGet("/alertas", ListarAlertas)
+            .WithSummary("Alertas de colado, opcionalmente por estado: ?estado=Abierta (RF-33). Sin sesión hasta que exista Identity");
         monitoreo.MapPost("/alertas/{id}/apagar-alarma", ApagarAlarma)
-            .WithSummary("Apaga la alarma y cierra la alerta (RF-34). Sin sesión hasta que exista Identity");
+            .WithSummary("Apaga la alarma y deja la alerta Atendida (RF-34). Sin sesión hasta que exista Identity");
 
         return app;
     }
@@ -77,7 +80,7 @@ public static partial class DispositivosEndpoints
     }
 
     private static async Task<Results<Ok<RespuestaCruce>, BadRequest<ErrorApi>, NotFound<ErrorApi>>> RegistrarCruce(
-        string id, SolicitudCruce cruce, EstacionEnMemoria estacion, CancellationToken ct)
+        string id, SolicitudCruce cruce, RegistrarCruce registrarCruce, CancellationToken ct)
     {
         if (cruce.TrackId is not { } trackId || string.IsNullOrWhiteSpace(cruce.SesionVision))
             return Invalido("CruceIncompleto", "Faltan trackId o sesionVision.");
@@ -93,11 +96,11 @@ public static partial class DispositivosEndpoints
         if (cruce.HoraFotograma is not { Kind: DateTimeKind.Utc } horaFotograma)
             return Invalido("HoraFotogramaInvalida", "horaFotograma va en UTC, en ISO-8601 terminado en Z.");
 
-        var respuesta = await estacion.RegistrarCruceAsync(id, cruce.SesionVision, trackId, sentido.Value, horaFotograma, ct);
-        if (respuesta is null)
+        var registro = await registrarCruce.EjecutarAsync(id, cruce.SesionVision, trackId, sentido.Value, horaFotograma, ct);
+        if (registro is null)
             return TorniqueteNoRegistrado(id);
 
-        return TypedResults.Ok(respuesta);
+        return TypedResults.Ok(RespuestaCruce.Desde(registro));
     }
 
     private static async Task<Results<NoContent, BadRequest<ErrorApi>, NotFound<ErrorApi>>> LatidoVision(
@@ -128,10 +131,25 @@ public static partial class DispositivosEndpoints
         return TypedResults.Ok(intentos.Select(IntentoResumen.Desde).ToArray());
     }
 
-    private static async Task<Results<Ok, NotFound<ErrorApi>>> ApagarAlarma(
-        string id, EstacionEnMemoria estacion, CancellationToken ct)
+    private static async Task<Results<Ok<AlertaResumen[]>, BadRequest<ErrorApi>>> ListarAlertas(
+        string? estado, ConsultarAlertas consultarAlertas, CancellationToken ct)
     {
-        if (!await estacion.ApagarAlarmaAsync(id, ct))
+        EstadoAlerta? filtro = null;
+        if (estado is not null)
+        {
+            if (!Enum.TryParse<EstadoAlerta>(estado, ignoreCase: true, out var valor) || !Enum.IsDefined(valor))
+                return Invalido("EstadoInvalido", "estado debe ser Abierta, Atendida o Resuelta.");
+            filtro = valor;
+        }
+
+        var alertas = await consultarAlertas.EjecutarAsync(filtro, ct);
+        return TypedResults.Ok(alertas.Select(AlertaResumen.Desde).ToArray());
+    }
+
+    private static async Task<Results<Ok, NotFound<ErrorApi>>> ApagarAlarma(
+        string id, ApagarAlarma apagarAlarma, CancellationToken ct)
+    {
+        if (!IdsPublicos.TryAlerta(id, out var alertaId) || !await apagarAlarma.EjecutarAsync(alertaId, ct))
             return TypedResults.NotFound(new ErrorApi("AlertaNoEncontrada", $"No existe la alerta {id}."));
 
         return TypedResults.Ok();

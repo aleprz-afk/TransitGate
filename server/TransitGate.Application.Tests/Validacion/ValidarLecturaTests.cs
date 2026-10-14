@@ -16,6 +16,7 @@ public class ValidarLecturaTests
     private readonly ParametrosFijos _parametros = new();
     private readonly IntentosFalsos _intentos = new();
     private readonly UnidadDeTrabajoFalsa _unidadDeTrabajo = new();
+    private readonly NotificadorFalso _notificador = new();
     private readonly ValidarLectura _validarLectura;
 
     public ValidarLecturaTests()
@@ -26,6 +27,7 @@ public class ValidarLecturaTests
             _cuentas,
             _cuentas,
             _unidadDeTrabajo,
+            _notificador,
             _parametros,
             new CerrojoTorniquetes(),
             Bitacora.Nula(),
@@ -172,6 +174,18 @@ public class ValidarLecturaTests
         Assert.Equal(TipoSoporte.Fisico, intento.TipoSoporte);
         Assert.Null(intento.Motivo);
         Assert.Equal(1, _unidadDeTrabajo.VecesGuardada);
+    }
+
+    [Fact] // RF-32, HU-19 CA1: cada intento llega en vivo al panel; un reintento no se vuelve a avisar
+    public async Task Cada_lectura_nueva_avisa_el_intento_al_panel()
+    {
+        _cuentas.Agregar("04A1B2C3", saldo: 5000);
+
+        await Leer("04A1B2C3", "a1f3-0001");
+        await Leer("04A1B2C3", "a1f3-0001");
+        await Leer("0A0B0C0D", "a1f3-0002");
+
+        Assert.Equal(_intentos.Guardados, _notificador.Intentos);
     }
 
     [Fact] // RF-23 CA2

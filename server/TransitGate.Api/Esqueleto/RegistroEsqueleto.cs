@@ -1,5 +1,6 @@
 using TransitGate.Application;
 using TransitGate.Application.Accesos;
+using TransitGate.Application.Alertas;
 using TransitGate.Application.Cuentas;
 using TransitGate.Application.Torniquetes;
 
@@ -20,7 +21,8 @@ public static class RegistroEsqueleto
         services.AddSingleton<CuentasDePrueba>();
         services.AddSingleton<ISoporteResolver>(sp => sp.GetRequiredService<CuentasDePrueba>());
         services.AddSingleton<ISaldoService>(sp => sp.GetRequiredService<CuentasDePrueba>());
-        services.AddSingleton<EstacionEnMemoria>();
+        services.AddSingleton<ICruceRepositorio, CruceRepositorioEnMemoria>();
+        services.AddSingleton<IAlertaRepositorio, AlertaRepositorioEnMemoria>();
         return services;
     }
 }

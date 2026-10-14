@@ -2,6 +2,7 @@ using System.Text.Json.Serialization;
 using TransitGate.Application.Torniquetes;
 using TransitGate.Application.Validacion;
 using TransitGate.Domain.Accesos;
+using TransitGate.Domain.Torniquetes;
 
 namespace TransitGate.Api.Contratos;
 
@@ -55,12 +56,13 @@ public record RespuestaCruce(
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? PasoId = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? AlertaId = null)
 {
-    public static readonly RespuestaCruce Registrado = new("registrado");
-    public static readonly RespuestaCruce Duplicado = new("duplicado");
-
-    public static RespuestaCruce Consumido(long pasoId) => new("consumido", PasoId: pasoId);
-
-    public static RespuestaCruce Fraude(string alertaId) => new("fraude", AlertaId: alertaId);
+    public static RespuestaCruce Desde(ResultadoRegistroCruce registro) => registro.Cruce switch
+    {
+        null => new("duplicado"),
+        { Resultado: TipoResultadoCruce.Consumido } cruce => new("consumido", PasoId: cruce.PasoId),
+        { Resultado: TipoResultadoCruce.Fraude } cruce => new("fraude", AlertaId: IdsPublicos.Alerta(cruce.AlertaId!.Value)),
+        _ => new("registrado"),
+    };
 }
 
 public record SolicitudLatidoVision(double? Fps, string? SesionVision);
