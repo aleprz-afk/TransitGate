@@ -1,6 +1,6 @@
 # Cambios del servidor: validación y torniquete
 
-Responsable: Alex · Última actualización: 14 de octubre de 2026 · Lo anterior ya está en `main` (PR #2, #3 y #4); en curso: `feat/x-device-key` y `feat/estado-torniquete-horas`
+Responsable: Alex · Última actualización: 14 de octubre de 2026 · Todo está en `main` (hasta el PR #9). Los contratos están en `docs/`: Contrato de la API v1.2 y Contratos de integración v1.3
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -197,7 +197,6 @@ dotnet run --project TransitGate.Api | Tee-Object -FilePath mediciones.log
 | Una lectura en modo registro se rechazaría como `TorniqueteOcupado` y dejaría un intento (RF-23 CA3 pide que no deje ninguno) | Semana 4, con la ruta del modo registro |
 | No se revierte el débito si el brazo no abre (RF-46) | Semana 6 |
 | SignalR solo envía `EstadoTorniquete`; faltan `IntentoRegistrado`, `AlertaNueva`, `SaldoActualizado` y los demás | Semanas 3 a 5, junto con cada entidad |
-| El documento de integración (v1.2) no tiene todavía `estadoDesde` ni `ultimaSenal` en `EstadoTorniquete` (C6), y `INotificador.EstadoTorniqueteAsync` tiene otra firma que en C7 | Subir los contratos a `docs/` y actualizarlos a v1.3 en un PR con la etiqueta `contrato`, aprobado por Ana (C6) |
 | Modo registro sin ruta todavía; el desafío del celular es fijo | Semanas 4 y Fase 4 |
 
 ## Historial

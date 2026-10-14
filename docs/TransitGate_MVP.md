@@ -89,8 +89,8 @@ Se verifican en el MVP los que protegen la demo y los que el profesor podría re
 | Elemento | Estado |
 | --- | --- |
 | ESP32-CAM (OV3660) con adaptador ESP32-CAM-MB | Comprado |
-| ESP32 DevKit (principal) | Por confirmar |
-| Lector PN532 | Por comprar |
+| ESP32 DevKit (principal) | Comprado |
+| Lector PN532 | Comprado |
 | Servo para el brazo | Por confirmar |
 | Sirena y su módulo relé o transistor | Sirena disponible; módulo por confirmar |
 | Tarjetas MIFARE Classic 1K (al menos 3) y NTAG213/215 (al menos 1) | Por comprar |
