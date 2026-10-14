@@ -23,9 +23,10 @@ Mientras no hay base de datos, todo vive en memoria (`TransitGate.Api/Esqueleto`
 | Ruta | Qué hace hoy |
 | --- | --- |
 | `POST /api/torniquetes/{id}/lecturas` | Valida contra las tarjetas de prueba, debita la tarifa y abre un paso; repite la respuesta si llega el mismo `lecturaId` |
-| `POST /api/torniquetes/{id}/latido` | Devuelve el estado deseado real (brazo, sirena, paso pendiente) y un desafío fijo |
+| `POST /api/torniquetes/{id}/latido` | Registra la señal de vida y confirma la apertura (`pasoIdAbierto`); devuelve el estado deseado y un desafío fijo |
 | `POST /api/torniquetes/{id}/cruces` | Consume el paso, marca fraude o responde `duplicado` |
-| `POST /api/torniquetes/{id}/vision/latido` | Responde 204 |
+| `POST /api/torniquetes/{id}/vision/latido` | Registra la señal de vida de la visión; responde 204 |
+| `GET /api/torniquetes` | Estado y conexión de cada torniquete (sin sesión todavía) |
 | `POST /api/alertas/{id}/apagar-alarma` | Apaga la alarma (sin sesión todavía) |
 
 Tarjetas de prueba (sección `DatosDePrueba` de `appsettings.json`, tarifa 3.200):
@@ -38,4 +39,14 @@ Tarjetas de prueba (sección `DatosDePrueba` de `appsettings.json`, tarifa 3.200
 | `5011C17A` | Entregada | 0 | `SoporteNoActivo` |
 | cualquier otro | — | — | `TarjetaNoRegistrada` |
 
-Para probar con una tarjeta real, agrega su UID a esa lista. Los tiempos (expiración del paso y gracia de visión) están en la sección `Operacion`.
+Para probar con una tarjeta real, agrega su UID a esa lista. Los tiempos (expiración del paso, gracia de visión y plazo de conexión del ESP32) están en la sección `Operacion`.
+
+## Mediciones
+
+El log sale una línea por evento con hora UTC al milisegundo. Las líneas que empiezan con `RNF-04` registran cada cambio del estado deseado y las que empiezan con `RNF-06`, cada cruce con su retraso. Para guardar el log de una sesión de pruebas (PowerShell):
+
+```
+dotnet run --project TransitGate.Api | Tee-Object -FilePath mediciones.log
+```
+
+Lo que cambió y lo que necesita saber cada integrante está en [CAMBIOS.md](CAMBIOS.md).

@@ -16,7 +16,12 @@ public sealed class OpcionesOperacion : IParametrosOperacion
     /// <summary>S13: gracia de visión; vale 1 s hasta que se mida con RNF-06.</summary>
     public int GraciaVisionMs { get; set; } = 1000;
 
+    /// <summary>S14: plazo sin latidos del ESP32 para marcarlo sin conexión.</summary>
+    public int PlazoSenalEsp32Segundos { get; set; } = 5;
+
     public TimeSpan VentanaPaso => TimeSpan.FromSeconds(ExpiracionPasoSegundos);
 
     public TimeSpan GraciaVision => TimeSpan.FromMilliseconds(GraciaVisionMs);
+
+    public TimeSpan PlazoSenalEsp32 => TimeSpan.FromSeconds(PlazoSenalEsp32Segundos);
 }

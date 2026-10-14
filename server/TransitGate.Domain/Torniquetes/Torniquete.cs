@@ -26,10 +26,26 @@ public class Torniquete
 
     public DateTime? ModoRegistroHasta { get; private set; }
 
+    /// <summary>Último latido del ESP32. La conexión no es un estado: se deduce de esta hora (S14).</summary>
+    public DateTime? UltimaSenalEsp32 { get; private set; }
+
+    /// <summary>Identificador de arranque del ESP32; cambia en cada reinicio (RF-45 CA3).</summary>
+    public string? ArranqueEsp32 { get; private set; }
+
+    public DateTime? UltimaSenalVision { get; private set; }
+
     // Estado deseado que recibe el ESP32. En Alarma el brazo queda cerrado y la sirena suena (RF-45 CA3).
     public bool BrazoDeseadoAbierto => Estado == EstadoTorniquete.EsperandoCruce;
 
     public bool SirenaDeseada => Estado == EstadoTorniquete.Alarma;
+
+    public EstadoDeseado Deseado => new(BrazoDeseadoAbierto, SirenaDeseada);
+
+    /// <summary>
+    /// Desde cuándo rige el estado deseado actual; con esta hora se mide RNF-04. En un vencimiento es la
+    /// hora en que vencía el plazo, no la hora en que el servidor lo notó.
+    /// </summary>
+    public DateTime? DeseadoDesde { get; private set; }
 
     /// <summary>
     /// Motivo por el que ahora no se puede autorizar un paso (primer chequeo de RF-20), o null si está libre.
@@ -42,20 +58,42 @@ public class Torniquete
         _ => MotivoIntento.TorniqueteOcupado,
     };
 
+    public bool Esp32Conectado(DateTime ahora, TimeSpan plazo) =>
+        UltimaSenalEsp32 is { } senal && ahora - senal < plazo;
+
+    public bool VisionConectada(DateTime ahora, TimeSpan plazo) =>
+        UltimaSenalVision is { } senal && ahora - senal < plazo;
+
     /// <summary>Aplica los vencimientos: el paso sin cruce (RF-29) y el fin del modo registro (S6).</summary>
     public void ActualizarPorTiempo(DateTime ahora)
     {
         if (Estado == EstadoTorniquete.EsperandoCruce && ahora >= PasoPendiente!.ExpiraEn)
         {
+            var vencimiento = PasoPendiente.ExpiraEn;
             PasoPendiente.Expirar();
             PasoPendiente = null;
-            Estado = EstadoTorniquete.Cerrado;
+            CambiarEstado(EstadoTorniquete.Cerrado, vencimiento);
         }
         else if (Estado == EstadoTorniquete.ModoRegistro && ahora >= ModoRegistroHasta)
         {
-            SalirDeModoRegistro();
+            SalirDeModoRegistro(ModoRegistroHasta.Value);
         }
     }
+
+    /// <summary>
+    /// Latido del ESP32 (RF-45, S11): registra la señal de vida y, si reporta el brazo abierto para el paso
+    /// pendiente, confirma la apertura (RF-22 CA4).
+    /// </summary>
+    public void RegistrarLatidoEsp32(DateTime ahora, long? pasoIdAbierto, string arranque)
+    {
+        UltimaSenalEsp32 = ahora;
+        ArranqueEsp32 = arranque;
+
+        if (pasoIdAbierto is { } pasoId && PasoPendiente?.Id == pasoId)
+            PasoPendiente.ConfirmarApertura(ahora);
+    }
+
+    public void RegistrarLatidoVision(DateTime ahora) => UltimaSenalVision = ahora;
 
     /// <summary>
     /// Abre la ventana de exactamente un paso (RF-22). Un cruce cuenta si su fotograma cae dentro de
@@ -68,7 +106,7 @@ public class Torniquete
             throw new InvalidOperationException($"El torniquete {Id} no puede autorizar un paso en estado {Estado}.");
 
         PasoPendiente = new PasoAutorizado(pasoId, ahora, ahora + ventana, ahora + ventana + gracia);
-        Estado = EstadoTorniquete.EsperandoCruce;
+        CambiarEstado(EstadoTorniquete.EsperandoCruce, ahora);
         return PasoPendiente;
     }
 
@@ -88,7 +126,7 @@ public class Torniquete
             var paso = PasoPendiente;
             paso.Consumir(horaFotograma);
             PasoPendiente = null;
-            Estado = EstadoTorniquete.Cerrado;
+            CambiarEstado(EstadoTorniquete.Cerrado, ahora);
             return ResultadoCruce.Consumido(paso);
         }
 
@@ -99,17 +137,17 @@ public class Torniquete
         PasoPendiente?.Expirar();   // el cruce cayó fuera de la ventana (RF-29 CA4)
         PasoPendiente = null;
         ModoRegistroHasta = null;   // RF-28 CA5: se cancela el modo registro
-        Estado = EstadoTorniquete.Alarma;
+        CambiarEstado(EstadoTorniquete.Alarma, ahora);
         return ResultadoCruce.Fraude(alertaNueva: true);
     }
 
     /// <summary>El personal apaga la alarma desde el panel (RF-34).</summary>
-    public void ApagarAlarma()
+    public void ApagarAlarma(DateTime ahora)
     {
         if (Estado != EstadoTorniquete.Alarma)
             throw new InvalidOperationException($"El torniquete {Id} no está en alarma.");
 
-        Estado = EstadoTorniquete.Cerrado;
+        CambiarEstado(EstadoTorniquete.Cerrado, ahora);
     }
 
     /// <summary>El operador pone el lector en modo registro para ligar una tarjeta nueva (RF-09, S6).</summary>
@@ -119,22 +157,30 @@ public class Torniquete
         if (Estado != EstadoTorniquete.Cerrado)
             throw new InvalidOperationException($"El torniquete {Id} no puede entrar en modo registro en estado {Estado}.");
 
-        Estado = EstadoTorniquete.ModoRegistro;
+        CambiarEstado(EstadoTorniquete.ModoRegistro, ahora);
         ModoRegistroHasta = ahora + duracion;
     }
 
     /// <summary>El UID leído ya se ligó a la solicitud (RF-10): el torniquete vuelve a Cerrado.</summary>
-    public void TerminarModoRegistro()
+    public void TerminarModoRegistro(DateTime ahora)
     {
         if (Estado != EstadoTorniquete.ModoRegistro)
             throw new InvalidOperationException($"El torniquete {Id} no está en modo registro.");
 
-        SalirDeModoRegistro();
+        SalirDeModoRegistro(ahora);
     }
 
-    private void SalirDeModoRegistro()
+    private void SalirDeModoRegistro(DateTime momento)
     {
         ModoRegistroHasta = null;
-        Estado = EstadoTorniquete.Cerrado;
+        CambiarEstado(EstadoTorniquete.Cerrado, momento);
+    }
+
+    private void CambiarEstado(EstadoTorniquete nuevo, DateTime momento)
+    {
+        var antes = Deseado;
+        Estado = nuevo;
+        if (Deseado != antes)
+            DeseadoDesde = momento;
     }
 }

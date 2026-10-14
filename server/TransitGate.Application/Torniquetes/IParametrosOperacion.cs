@@ -11,4 +11,7 @@ public interface IParametrosOperacion
 
     /// <summary>S13: gracia de visión.</summary>
     TimeSpan GraciaVision { get; }
+
+    /// <summary>S14: sin latidos del ESP32 durante este plazo, el torniquete figura sin conexión.</summary>
+    TimeSpan PlazoSenalEsp32 { get; }
 }

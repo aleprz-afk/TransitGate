@@ -25,6 +25,7 @@ public class ValidarLecturaTests
             _cuentas,
             _parametros,
             new CerrojoTorniquetes(),
+            Bitacora.Nula(),
             new RelojFijo(Ahora));
     }
 

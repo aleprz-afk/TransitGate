@@ -17,6 +17,9 @@ public sealed class TorniqueteRepositorioEnMemoria : ITorniqueteRepositorio
     public Task<Torniquete?> ObtenerAsync(string torniqueteId, CancellationToken ct = default) =>
         Task.FromResult(_torniquetes.GetValueOrDefault(torniqueteId));
 
+    public Task<IReadOnlyList<Torniquete>> ListarAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<Torniquete>>([.. _torniquetes.Values]);
+
     public Task<long> SiguientePasoIdAsync(CancellationToken ct = default) =>
         Task.FromResult(Interlocked.Increment(ref _ultimoPasoId));
 }

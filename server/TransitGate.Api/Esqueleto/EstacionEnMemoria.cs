@@ -6,37 +6,19 @@ using TransitGate.Domain.Torniquetes;
 namespace TransitGate.Api.Esqueleto;
 
 /// <summary>
-/// Lo que queda del esqueleto de la semana 1: latido, cruces y alertas en memoria, sobre el mismo
-/// torniquete que usa ValidarLectura. Pasan a casos de uso de Application en las semanas 2 (latido real),
-/// 4 (cruces) y 5 (AlertaSeguridad).
+/// Lo que queda del esqueleto de la semana 1: cruces y alertas en memoria, sobre el mismo torniquete que
+/// usan ValidarLectura y ProcesarLatido. Pasan a casos de uso de Application en las semanas 4 (cruces)
+/// y 5 (AlertaSeguridad).
 /// </summary>
-public sealed class EstacionEnMemoria(ITorniqueteRepositorio torniquetes, CerrojoTorniquetes cerrojo, TimeProvider reloj)
+public sealed class EstacionEnMemoria(
+    ITorniqueteRepositorio torniquetes,
+    CerrojoTorniquetes cerrojo,
+    BitacoraTorniquete bitacora,
+    TimeProvider reloj)
 {
-    // El celular es Fase 4: por ahora el latido trae siempre el desafío del vector de prueba de C2 (16 bytes en 0).
-    private static readonly DesafioLatido DesafioFijo = new("d_esqueleto", new string('0', 32), 30);
-
     private readonly ConcurrentDictionary<(string Torniquete, string SesionVision, long TrackId), byte> _cruces = new();
     private readonly ConcurrentDictionary<string, AlertaEnMemoria> _alertas = new();
     private int _ultimaAlertaId;
-
-    /// <summary>Devuelve null si el torniquete no existe.</summary>
-    public async Task<RespuestaLatido?> LatidoAsync(string torniqueteId, CancellationToken ct = default)
-    {
-        if (await torniquetes.ObtenerAsync(torniqueteId, ct) is not { } torniquete)
-            return null;
-
-        using (await cerrojo.TomarAsync(torniqueteId, ct))
-        {
-            torniquete.ActualizarPorTiempo(Ahora());
-
-            return new RespuestaLatido(
-                BrazoDeseado: torniquete.BrazoDeseadoAbierto ? "abierto" : "cerrado",
-                SirenaDeseada: torniquete.SirenaDeseada,
-                PasoId: torniquete.PasoPendiente?.Id,
-                ModoRegistro: torniquete.Estado == EstadoTorniquete.ModoRegistro,
-                Desafio: DesafioFijo);
-        }
-    }
 
     /// <summary>Devuelve null si el torniquete no existe.</summary>
     public async Task<RespuestaCruce?> RegistrarCruceAsync(
@@ -47,24 +29,15 @@ public sealed class EstacionEnMemoria(ITorniqueteRepositorio torniquetes, Cerroj
         DateTime horaFotograma,
         CancellationToken ct = default)
     {
+        var llegada = Ahora();
         if (await torniquetes.ObtenerAsync(torniqueteId, ct) is not { } torniquete)
             return null;
 
         using (await cerrojo.TomarAsync(torniqueteId, ct))
         {
-            // RF-26 CA3: sesionVision + trackId es la clave de idempotencia.
-            if (!_cruces.TryAdd((torniqueteId, sesionVision, trackId), 0))
-                return RespuestaCruce.Duplicado;
-
-            var resultado = torniquete.RegistrarCruce(sentido, horaFotograma, Ahora());
-
-            return resultado.Tipo switch
-            {
-                TipoResultadoCruce.Consumido => RespuestaCruce.Consumido(resultado.Paso!.Id),
-                TipoResultadoCruce.Fraude => RespuestaCruce.Fraude(
-                    resultado.AlertaNueva ? CrearAlerta(torniqueteId) : AlertaAbierta(torniqueteId)),
-                _ => RespuestaCruce.Registrado,
-            };
+            var respuesta = Evaluar(torniquete, sesionVision, trackId, sentido, horaFotograma);
+            bitacora.Cruce(torniqueteId, trackId, sentido, horaFotograma, llegada, respuesta.Resultado);
+            return respuesta;
         }
     }
 
@@ -79,12 +52,34 @@ public sealed class EstacionEnMemoria(ITorniqueteRepositorio torniquetes, Cerroj
             if (alerta.Abierta)
             {
                 var torniquete = await torniquetes.ObtenerAsync(alerta.TorniqueteId, ct);
-                torniquete!.ApagarAlarma();
+                var antes = torniquete!.Deseado;
+                torniquete.ApagarAlarma(Ahora());
                 alerta.Abierta = false;
+                bitacora.SiCambioElDeseado(torniquete, antes, "apagar-alarma");
             }
         }
 
         return true;
+    }
+
+    private RespuestaCruce Evaluar(
+        Torniquete torniquete, string sesionVision, long trackId, SentidoCruce sentido, DateTime horaFotograma)
+    {
+        // RF-26 CA3: sesionVision + trackId es la clave de idempotencia.
+        if (!_cruces.TryAdd((torniquete.Id, sesionVision, trackId), 0))
+            return RespuestaCruce.Duplicado;
+
+        var antes = torniquete.Deseado;
+        var resultado = torniquete.RegistrarCruce(sentido, horaFotograma, Ahora());
+        bitacora.SiCambioElDeseado(torniquete, antes, "cruce");
+
+        return resultado.Tipo switch
+        {
+            TipoResultadoCruce.Consumido => RespuestaCruce.Consumido(resultado.Paso!.Id),
+            TipoResultadoCruce.Fraude => RespuestaCruce.Fraude(
+                resultado.AlertaNueva ? CrearAlerta(torniquete.Id) : AlertaAbierta(torniquete.Id)),
+            _ => RespuestaCruce.Registrado,
+        };
     }
 
     private DateTime Ahora() => reloj.GetUtcNow().UtcDateTime;

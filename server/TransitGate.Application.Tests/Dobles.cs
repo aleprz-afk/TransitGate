@@ -1,3 +1,4 @@
+using Microsoft.Extensions.Logging.Abstractions;
 using TransitGate.Application.Cuentas;
 using TransitGate.Application.Torniquetes;
 using TransitGate.Application.Validacion;
@@ -58,6 +59,9 @@ internal sealed class TorniquetesFalsos(Torniquete torniquete) : ITorniqueteRepo
     public Task<Torniquete?> ObtenerAsync(string torniqueteId, CancellationToken ct = default) =>
         Task.FromResult(torniqueteId == torniquete.Id ? torniquete : null);
 
+    public Task<IReadOnlyList<Torniquete>> ListarAsync(CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<Torniquete>>([torniquete]);
+
     public Task<long> SiguientePasoIdAsync(CancellationToken ct = default) => Task.FromResult(++_ultimoPasoId);
 }
 
@@ -80,9 +84,18 @@ internal sealed class ParametrosFijos : IParametrosOperacion
     public TimeSpan VentanaPaso { get; set; } = TimeSpan.FromSeconds(10);
 
     public TimeSpan GraciaVision { get; set; } = TimeSpan.FromSeconds(1);
+
+    public TimeSpan PlazoSenalEsp32 { get; set; } = TimeSpan.FromSeconds(5);
 }
 
 internal sealed class RelojFijo(DateTime ahoraUtc) : TimeProvider
 {
-    public override DateTimeOffset GetUtcNow() => new(ahoraUtc, TimeSpan.Zero);
+    public DateTime Ahora { get; set; } = ahoraUtc;
+
+    public override DateTimeOffset GetUtcNow() => new(Ahora, TimeSpan.Zero);
+}
+
+internal static class Bitacora
+{
+    public static BitacoraTorniquete Nula() => new(NullLogger<BitacoraTorniquete>.Instance);
 }

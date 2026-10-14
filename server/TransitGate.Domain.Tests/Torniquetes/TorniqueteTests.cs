@@ -178,7 +178,7 @@ public class TorniqueteTests
     {
         var torniquete = EnAlarma();
 
-        torniquete.ApagarAlarma();
+        torniquete.ApagarAlarma(Seg(30));
 
         Assert.Equal(EstadoTorniquete.Cerrado, torniquete.Estado);
         Assert.False(torniquete.SirenaDeseada);
@@ -188,7 +188,7 @@ public class TorniqueteTests
     [Fact]
     public void Apagar_la_alarma_sin_alarma_es_un_error()
     {
-        Assert.Throws<InvalidOperationException>(() => NuevoTorniquete().ApagarAlarma());
+        Assert.Throws<InvalidOperationException>(() => NuevoTorniquete().ApagarAlarma(T0));
     }
 
     [Fact] // RF-26 CA2 y S7
@@ -226,7 +226,7 @@ public class TorniqueteTests
         var torniquete = NuevoTorniquete();
         torniquete.ActivarModoRegistro(T0, TimeSpan.FromSeconds(60));
 
-        torniquete.TerminarModoRegistro();
+        torniquete.TerminarModoRegistro(Seg(20));
 
         Assert.Equal(EstadoTorniquete.Cerrado, torniquete.Estado);
     }
@@ -251,5 +251,70 @@ public class TorniqueteTests
         Assert.True(resultado.AlertaNueva);
         Assert.Equal(EstadoTorniquete.Alarma, torniquete.Estado);
         Assert.Null(torniquete.ModoRegistroHasta);
+    }
+
+    [Fact] // RF-22 CA4
+    public void El_latido_con_el_brazo_abierto_para_el_paso_confirma_la_apertura()
+    {
+        var torniquete = ConPasoAutorizado(out var paso);
+
+        torniquete.RegistrarLatidoEsp32(Seg(0.3), pasoIdAbierto: 999, arranque: "a1f3");
+        Assert.Null(paso.AperturaConfirmadaEn);
+
+        torniquete.RegistrarLatidoEsp32(Seg(0.6), pasoIdAbierto: 123, arranque: "a1f3");
+        Assert.Equal(Seg(0.6), paso.AperturaConfirmadaEn);
+    }
+
+    [Fact] // S14
+    public void El_esp32_queda_sin_conexion_tras_5_s_sin_latidos()
+    {
+        var torniquete = NuevoTorniquete();
+        var plazo = TimeSpan.FromSeconds(5);
+        Assert.False(torniquete.Esp32Conectado(T0, plazo));
+
+        torniquete.RegistrarLatidoEsp32(T0, pasoIdAbierto: null, arranque: "a1f3");
+
+        Assert.True(torniquete.Esp32Conectado(Seg(4.9), plazo));
+        Assert.False(torniquete.Esp32Conectado(Seg(5), plazo));
+        Assert.Equal("a1f3", torniquete.ArranqueEsp32);
+    }
+
+    [Fact] // S14
+    public void La_vision_queda_sin_conexion_tras_15_s_sin_senal()
+    {
+        var torniquete = NuevoTorniquete();
+        var plazo = TimeSpan.FromSeconds(15);
+
+        torniquete.RegistrarLatidoVision(T0);
+
+        Assert.True(torniquete.VisionConectada(Seg(14), plazo));
+        Assert.False(torniquete.VisionConectada(Seg(15), plazo));
+    }
+
+    [Fact] // RNF-04
+    public void Cada_cambio_del_estado_deseado_guarda_desde_cuando_rige()
+    {
+        var torniquete = ConPasoAutorizado(out _);
+        Assert.Equal(new EstadoDeseado(BrazoAbierto: true, SirenaEncendida: false), torniquete.Deseado);
+        Assert.Equal(T0, torniquete.DeseadoDesde);
+
+        // El vencimiento se fecha cuando vencía el plazo (10 s + 1 s), aunque el servidor lo note después.
+        torniquete.ActualizarPorTiempo(Seg(11.2));
+        Assert.Equal(new EstadoDeseado(false, false), torniquete.Deseado);
+        Assert.Equal(Seg(11), torniquete.DeseadoDesde);
+
+        torniquete.RegistrarCruce(SentidoCruce.Entrada, Seg(20), Seg(20));
+        Assert.Equal(new EstadoDeseado(false, true), torniquete.Deseado);
+        Assert.Equal(Seg(20), torniquete.DeseadoDesde);
+    }
+
+    [Fact]
+    public void Entrar_en_modo_registro_no_cambia_el_estado_deseado()
+    {
+        var torniquete = NuevoTorniquete();
+
+        torniquete.ActivarModoRegistro(T0, TimeSpan.FromSeconds(60));
+
+        Assert.Null(torniquete.DeseadoDesde);
     }
 }

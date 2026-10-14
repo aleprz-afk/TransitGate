@@ -18,6 +18,7 @@ public sealed class ValidarLectura(
     ISaldoService saldos,
     IParametrosOperacion parametros,
     CerrojoTorniquetes cerrojo,
+    BitacoraTorniquete bitacora,
     TimeProvider reloj)
 {
     /// <summary>Devuelve null si el torniquete no existe.</summary>
@@ -32,15 +33,19 @@ public sealed class ValidarLectura(
             if (await lecturas.BuscarAsync(torniqueteId, lecturaId, ct) is { } previa)
                 return previa;
 
-            var resultado = await DecidirAsync(torniquete, uidHex, ct);
+            var ahora = reloj.GetUtcNow().UtcDateTime;
+            var antes = torniquete.Deseado;
+            var resultado = await DecidirAsync(torniquete, uidHex, ahora, ct);
             await lecturas.GuardarAsync(torniqueteId, lecturaId, resultado, ct);
+
+            bitacora.SiCambioElDeseado(torniquete, antes, "lectura");
+            bitacora.Lectura(torniqueteId, lecturaId, uidHex, resultado.Autorizado ? "abrir" : $"{resultado.Motivo}", ahora);
             return resultado;
         }
     }
 
-    private async Task<ResultadoLectura> DecidirAsync(Torniquete torniquete, string uidHex, CancellationToken ct)
+    private async Task<ResultadoLectura> DecidirAsync(Torniquete torniquete, string uidHex, DateTime ahora, CancellationToken ct)
     {
-        var ahora = reloj.GetUtcNow().UtcDateTime;
         torniquete.ActualizarPorTiempo(ahora);
 
         if (torniquete.MotivoNoDisponible is { } motivoTorniquete)

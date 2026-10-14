@@ -1,4 +1,5 @@
 using System.Text.Json.Serialization;
+using TransitGate.Application.Torniquetes;
 using TransitGate.Application.Validacion;
 using TransitGate.Domain.Accesos;
 
@@ -32,7 +33,18 @@ public record RespuestaLatido(
     bool SirenaDeseada,
     long? PasoId,
     bool ModoRegistro,
-    DesafioLatido? Desafio);
+    DesafioLatido? Desafio)
+{
+    // El celular es Fase 4: por ahora va siempre el desafío del vector de prueba de C2 (16 bytes en 0).
+    private static readonly DesafioLatido DesafioFijo = new("d_esqueleto", new string('0', 32), 30);
+
+    public static RespuestaLatido Desde(OrdenEsp32 orden) => new(
+        orden.Deseado.BrazoAbierto ? "abierto" : "cerrado",
+        orden.Deseado.SirenaEncendida,
+        orden.PasoId,
+        orden.ModoRegistro,
+        DesafioFijo);
+}
 
 public record DesafioLatido(string DesafioId, string Valor, int ExpiraEn);
 

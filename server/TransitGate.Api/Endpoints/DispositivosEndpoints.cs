@@ -9,8 +9,9 @@ using TransitGate.Domain.Torniquetes;
 namespace TransitGate.Api.Endpoints;
 
 /// <summary>
-/// Rutas de los dispositivos: ESP32 principal (Contrato §6) y servicio de visión (§7).
-/// Todavía no exigen X-Device-Key (RNF-20); se agrega con los torniquetes en la base de datos.
+/// Rutas de los dispositivos: ESP32 principal (Contrato §6) y servicio de visión (§7), más las dos de
+/// monitoreo (§8) que hacen falta para probar el flujo completo con los simuladores (RNF-38).
+/// Todavía no exigen X-Device-Key (RNF-20) ni sesión; se agregan con la base de datos e Identity.
 /// </summary>
 public static partial class DispositivosEndpoints
 {
@@ -28,8 +29,10 @@ public static partial class DispositivosEndpoints
         vision.MapPost("/vision/latido", LatidoVision)
             .WithSummary("Señal de vida del servicio de visión, cada 5 s (S14)");
 
-        app.MapPost("/api/alertas/{id}/apagar-alarma", ApagarAlarma)
-            .WithTags("Monitoreo")
+        var monitoreo = app.MapGroup("/api").WithTags("Monitoreo");
+        monitoreo.MapGet("/torniquetes", ListarTorniquetes)
+            .WithSummary("Estado y conexión de los torniquetes (RF-31, RF-37). Sin sesión hasta que exista Identity");
+        monitoreo.MapPost("/alertas/{id}/apagar-alarma", ApagarAlarma)
             .WithSummary("Apaga la alarma y cierra la alerta (RF-34). Sin sesión hasta que exista Identity");
 
         return app;
@@ -53,18 +56,18 @@ public static partial class DispositivosEndpoints
     }
 
     private static async Task<Results<Ok<RespuestaLatido>, BadRequest<ErrorApi>, NotFound<ErrorApi>>> Latido(
-        string id, SolicitudLatido latido, EstacionEnMemoria estacion, CancellationToken ct)
+        string id, SolicitudLatido latido, ProcesarLatido procesarLatido, CancellationToken ct)
     {
         if (latido.BrazoReal is not ("abierto" or "cerrado"))
             return Invalido("BrazoRealInvalido", "brazoReal debe ser \"abierto\" o \"cerrado\".");
         if (latido.SirenaReal is null || string.IsNullOrWhiteSpace(latido.Arranque))
             return Invalido("LatidoIncompleto", "Faltan sirenaReal o arranque.");
 
-        var respuesta = await estacion.LatidoAsync(id, ct);
-        if (respuesta is null)
+        var orden = await procesarLatido.DelEsp32Async(id, latido.PasoIdAbierto, latido.Arranque, ct);
+        if (orden is null)
             return TorniqueteNoRegistrado(id);
 
-        return TypedResults.Ok(respuesta);
+        return TypedResults.Ok(RespuestaLatido.Desde(orden));
     }
 
     private static async Task<Results<Ok<RespuestaCruce>, BadRequest<ErrorApi>, NotFound<ErrorApi>>> RegistrarCruce(
@@ -92,15 +95,21 @@ public static partial class DispositivosEndpoints
     }
 
     private static async Task<Results<NoContent, BadRequest<ErrorApi>, NotFound<ErrorApi>>> LatidoVision(
-        string id, SolicitudLatidoVision latido, ITorniqueteRepositorio torniquetes, CancellationToken ct)
+        string id, SolicitudLatidoVision latido, ProcesarLatido procesarLatido, CancellationToken ct)
     {
         if (latido.Fps is null || string.IsNullOrWhiteSpace(latido.SesionVision))
             return Invalido("LatidoIncompleto", "Faltan fps o sesionVision.");
-        if (await torniquetes.ObtenerAsync(id, ct) is null)
+        if (!await procesarLatido.DeLaVisionAsync(id, ct))
             return TorniqueteNoRegistrado(id);
 
-        // La conexión de la visión (S14, RF-30) se empieza a llevar con el latido real.
         return TypedResults.NoContent();
+    }
+
+    private static async Task<Ok<TorniqueteResumen[]>> ListarTorniquetes(
+        ConsultarTorniquetes consultarTorniquetes, CancellationToken ct)
+    {
+        var resumenes = await consultarTorniquetes.EjecutarAsync(ct);
+        return TypedResults.Ok(resumenes.Select(TorniqueteResumen.Desde).ToArray());
     }
 
     private static async Task<Results<Ok, NotFound<ErrorApi>>> ApagarAlarma(
