@@ -27,6 +27,7 @@ Mientras no hay base de datos, todo vive en memoria (`TransitGate.Api/Esqueleto`
 | `POST /api/torniquetes/{id}/cruces` | Consume el paso, marca fraude o responde `duplicado` |
 | `POST /api/torniquetes/{id}/vision/latido` | Registra la señal de vida de la visión; responde 204 |
 | `GET /api/torniquetes` | Estado y conexión de cada torniquete (sin sesión todavía) |
+| `GET /api/torniquetes/{id}/intentos` | Últimos 100 intentos de acceso (sin sesión todavía) |
 | Hub `/hubs/eventos` | Evento `EstadoTorniquete` en vivo al grupo `operacion` (sin sesión todavía) |
 | `POST /api/alertas/{id}/apagar-alarma` | Apaga la alarma (sin sesión todavía) |
 

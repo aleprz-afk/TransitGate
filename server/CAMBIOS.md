@@ -1,6 +1,6 @@
 # Cambios del servidor: validación y torniquete
 
-Responsable: Alex · Última actualización: 13 de octubre de 2026 · Ramas: `feat/rf-20-validacion` (PR #2) y `feat/signalr-estado-torniquete`
+Responsable: Alex · Última actualización: 13 de octubre de 2026 · Ramas: `feat/rf-20-validacion` (PR #2), `feat/signalr-estado-torniquete` y `feat/rf-23-intento-acceso`, en ese orden
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -8,12 +8,56 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 
 - La API corre en `http://<IP de la laptop>:5000` y la documentación interactiva en `http://<IP>:5000/scalar`.
 - Las rutas del ESP32 y de la visión siguen el Contrato API v1.1 (§6 y §7) y ya usan la máquina de estados real del torniquete: `Cerrado`, `EsperandoCruce`, `Alarma` y `ModoRegistro`.
-- La lectura valida torniquete, soporte y saldo en el orden de RF-20, debita la tarifa (3.200) y abre un paso.
+- La lectura valida torniquete, soporte y saldo en el orden de RF-20, debita la tarifa (3.200) y abre un paso. Cada lectura deja un `IntentoAcceso` con su resultado y motivo (RF-23).
 - El latido devuelve el estado deseado, registra la señal de vida y confirma la apertura del brazo.
 - Los cruces consumen el paso, detectan colados y activan la alarma.
 - El hub de SignalR `/hubs/eventos` envía `EstadoTorniquete` en vivo: estado, conexión del ESP32 y de la visión, y desincronización.
-- Todo vive en memoria hasta que esté la base de datos: **al reiniciar la API se pierde el estado**.
-- Hay 52 pruebas automatizadas (dominio y casos de uso), una por criterio de aceptación.
+- Todo vive en memoria hasta que esté la base de datos (PostgreSQL en Docker, ver "Decisiones"): **al reiniciar la API se pierde el estado**.
+- Hay 57 pruebas automatizadas (dominio y casos de uso), una por criterio de aceptación.
+
+## Decisiones
+
+### Base de datos: PostgreSQL local con Docker (13 de octubre)
+
+**Qué:** PostgreSQL corre en un contenedor de Docker en la misma laptop que la API, tanto en desarrollo como en la demo. No se usa una base en la nube (Supabase u otra).
+
+**Por qué:**
+
+1. **La demo no puede depender de internet.** La arquitectura (§7 y §9) ya decidió que todo corre en la laptop y en la red local porque el internet de la universidad no es confiable. Con una base en la nube, sin internet el torniquete deja de validar.
+2. **Los tiempos no alcanzan con una base remota.** RNF-03 da 200 ms al servidor para decidir un paso, y una lectura hace varias consultas (soporte, saldo, débito, intento y paso). Con la base en la nube cada consulta tarda 100 a 200 ms en ir y volver; con la base local tarda menos de 1 ms.
+3. **Los planes gratuitos en la nube pausan el proyecto** tras unos días sin uso: un riesgo innecesario para la demo.
+4. **PostgreSQL cumple los RNF de fiabilidad:** transacciones reales para guardar el paso completo (RNF-15) y control de concurrencia sobre el saldo (RNF-16).
+5. **Docker iguala el entorno de todos:** misma versión y misma configuración con un solo comando. Si algún día se quiere publicar en la nube, es el mismo PostgreSQL: solo cambia la cadena de conexión.
+
+**Cómo se usa** (lo prepara Jeisy, dueña de la base de datos):
+
+- Requisito: Docker Desktop instalado y abierto.
+- En la raíz del repo habrá un `docker-compose.yml` con PostgreSQL. La contraseña no va en el repo (RNF-25): va en un archivo `.env`, que git ya ignora, y en el repo se sube un `.env.example` con valores falsos. Propuesta:
+
+  ```yaml
+  services:
+    db:
+      image: postgres:17
+      environment:
+        POSTGRES_DB: transitgate
+        POSTGRES_USER: transitgate
+        POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      ports:
+        - "5432:5432"
+      volumes:
+        - datos:/var/lib/postgresql/data
+  volumes:
+    datos:
+  ```
+
+- Levantar la base: `docker compose up -d`. Detenerla: `docker compose down`. **`docker compose down -v` borra todos los datos.**
+- La cadena de conexión va en los secretos de usuario de .NET, no en `appsettings.json` (RNF-25):
+
+  ```
+  dotnet user-secrets set "ConnectionStrings:TransitGate" "Host=localhost;Port=5432;Database=transitgate;Username=transitgate;Password=<la del .env>" --project server/TransitGate.Api
+  ```
+
+- En la laptop de la demo, Docker Desktop tiene que estar abierto **antes** de arrancar la API.
 
 ## Qué necesita saber cada uno
 
@@ -71,6 +115,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
   ```
 
 - `GET /api/torniquetes` devuelve `[{ id, nombre, estado, conectado, ultimaSenal }]` (Contrato §8), útil para la carga inicial.
+- `GET /api/torniquetes/{id}/intentos` devuelve los últimos 100 intentos, del más reciente al más antiguo: `[{ intentoId, resultado, motivo, fecha }]` (Contrato §8, RF-32). `resultado` es `Exitoso`, `Rechazado` o `Fraude`; `motivo` no viene en los exitosos. Todavía no acepta `desde` ni `hasta`.
 - `POST /api/alertas/{alertaId}/apagar-alarma` apaga la alarma y cierra la alerta.
 - Estas rutas funcionan **sin sesión** por ahora; exigirán sesión de operador cuando esté Identity.
 - El OpenAPI para generar los tipos TypeScript está en `http://<IP>:5000/openapi/v1.json`.
@@ -84,16 +129,22 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
   2. `ResultadoDebito` quedó como `(bool Exitoso, decimal SaldoRestante)`. Si el saldo no alcanza, no se descuenta nada (S3).
   3. C7 usa `decimal` para el dinero y el JSON usa enteros (RNF-24). Hoy la API convierte a entero al responder.
 - El id del paso se reserva **antes** de debitar, porque `DebitarAsync` lo recibe.
-- `INotificador` (también de C7, lo implemento yo) está en `Application/Notificaciones/`. Por ahora solo tiene `EstadoTorniqueteAsync`, y recibe el estado ya calculado en lugar del id del torniquete, como dice el contrato. Cuando agregue `SaldoActualizadoAsync` para tus recargas, te aviso.
+- `INotificador` (también de C7, lo implemento yo) está en `Application/Notificaciones/`. Por ahora solo tiene `EstadoTorniqueteAsync`, que recibe el estado ya calculado y no el id del torniquete que dice el contrato. Cuando agregue `SaldoActualizadoAsync` para tus recargas, te aviso.
+- **Transacción del paso (RNF-15):** `ValidarLectura` termina con un solo `IUnidadDeTrabajo.GuardarCambiosAsync` (en `Application/`). Con EF Core, la idea es que tu `DbContext` lo implemente y que `ISaldoService` y mis repositorios compartan ese mismo `DbContext`, así el débito, el paso y el intento se guardan juntos o no se guarda ninguno.
+- **Ids:** los pasos y los intentos piden su id antes de guardarse (`SiguientePasoIdAsync`, `SiguienteIdAsync`). En PostgreSQL esto se resuelve con secuencias (`UseHiLo` de Npgsql).
+- Agregué el enum `TipoSoporte` (`Fisico`, `Virtual`) en `Domain/Tarjetas/` porque `IntentoAcceso` lo guarda (RF-23). También es de tu módulo.
 
-## Mediciones de H1 (RNF-04 y RNF-06)
+## Mediciones (RNF-03, RNF-04 y RNF-06)
 
 El log tiene una línea por evento, con hora UTC al milisegundo:
 
 ```
+RNF-03 POST /api/torniquetes/tq_1/lecturas 200 24.5 ms
 RNF-04 tq_1 estado deseado: brazo=abierto sirena=apagada desde=2026-10-14T03:59:30.777Z causa=lectura
 RNF-06 tq_1 cruce trackId=1 sentido=Entrada fotograma=2026-10-14T03:59:31.061Z llegada=2026-10-14T03:59:31.305Z retrasoMs=244 resultado=consumido
 ```
+
+- **RNF-03:** cada petición a `/api` registra cuánto tardó dentro del servidor. Los latidos no aparecen salvo que fallen o pasen de 200 ms, para no llenar el log (llegan cada 300 ms). La medición oficial (p95 ≤ 200 ms con 1.000 tarjetas y 10.000 intentos) se hace cuando esté la base de datos; en memoria cada lectura tarda alrededor de 0,1 ms.
 
 - **RNF-04:** se compara `desde` con la hora en que el ESP32 aplica el cambio (en su propio log, con NTP). Cuando un paso vence, `desde` es la hora en que vencía el plazo, no la hora en que el servidor lo notó.
 - **RNF-06:** `retrasoMs` cubre del servicio de visión a la API. El tramo de la cámara al servicio se mide con el cronómetro filmado.
@@ -109,13 +160,22 @@ dotnet run --project TransitGate.Api | Tee-Object -FilePath mediciones.log
 | --- | --- |
 | Todo en memoria; se pierde al reiniciar | Cuando esté la base de datos (Jeisy, semana 2) |
 | Sin `X-Device-Key` ni sesión en el panel | Con la base de datos e Identity (semanas 2 y 3) |
-| No se registra el `IntentoAcceso` ni hay transacción del paso (RNF-15) | Semana 3 |
+| La transacción del paso (RNF-15) está definida pero en memoria no se deshace nada si algo falla a la mitad | Cuando esté la base de datos; ahí se agrega la prueba con fallo forzado |
+| Los cruces de fraude todavía no dejan un `IntentoAcceso` con resultado `Fraude` (RF-28 CA1) | Semana 4, cuando los cruces pasen a Application |
+| Una lectura en modo registro se rechazaría como `TorniqueteOcupado` y dejaría un intento (RF-23 CA3 pide que no deje ninguno) | Semana 4, con la ruta del modo registro |
 | No se revierte el débito si el brazo no abre (RF-46) | Semana 6 |
 | SignalR solo envía `EstadoTorniquete`; faltan `IntentoRegistrado`, `AlertaNueva`, `SaldoActualizado` y los demás | Semanas 3 a 5, junto con cada entidad |
 | `INotificador.EstadoTorniqueteAsync` no coincide con la firma del contrato C7 | Actualizar el documento de integración en un PR con la etiqueta `contrato` |
 | Modo registro sin ruta todavía; el desafío del celular es fijo | Semanas 4 y Fase 4 |
 
 ## Historial
+
+**13 de octubre (semana 2), tercera parte**
+- Decisión: PostgreSQL local con Docker (sección "Decisiones").
+- `IntentoAcceso` (RF-23): cada lectura queda registrada con resultado, motivo, tarjeta, UID leído y tarifa cobrada. Los reintentos con el mismo `lecturaId` se responden con el intento guardado.
+- Transacción del paso definida con `IUnidadDeTrabajo` (RNF-15).
+- `GET /api/torniquetes/{id}/intentos` para el historial del panel (RF-32).
+- Registro del tiempo de cada petición para RNF-03.
 
 **13 de octubre (semana 2), segunda parte**
 - Hub de SignalR `/hubs/eventos` con el evento `EstadoTorniquete`.
