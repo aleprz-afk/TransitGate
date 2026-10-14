@@ -18,7 +18,7 @@ La API escucha en `http://0.0.0.0:5000` (contratos de integración §9), así qu
 
 Las rutas de los dispositivos siguen el Contrato API v1.1 (§6 y §7). La lectura ya pasa por el caso de uso `ValidarLectura` (Application), que valida torniquete, soporte y saldo en el orden de RF-20 a través del contrato C7 (`ISoporteResolver`, `ISaldoService`).
 
-Mientras no hay base de datos, todo vive en memoria (`TransitGate.Api/Esqueleto`): un solo torniquete `tq_1`, sin `X-Device-Key`, y al reiniciar la API se pierde el estado. Para pasar a la base de datos se cambia `AddEsqueletoEnMemoria` en `Program.cs`.
+Mientras no hay base de datos, todo vive en memoria (`TransitGate.Api/Esqueleto`): un solo torniquete `tq_1`, y al reiniciar la API se pierde el estado. Las rutas del ESP32 y de la visión verifican `X-Device-Key` en modo tolerante (ver "Credenciales de los dispositivos" en [CAMBIOS.md](CAMBIOS.md)). Para pasar a la base de datos se cambia `AddEsqueletoEnMemoria` en `Program.cs`.
 
 | Ruta | Qué hace hoy |
 | --- | --- |

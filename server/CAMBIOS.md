@@ -1,6 +1,6 @@
 # Cambios del servidor: validación y torniquete
 
-Responsable: Alex · Última actualización: 13 de octubre de 2026 · Ramas: `feat/rf-20-validacion` (PR #2), `feat/signalr-estado-torniquete` y `feat/rf-23-intento-acceso`, en ese orden
+Responsable: Alex · Última actualización: 14 de octubre de 2026 · Lo anterior ya está en `main` (PR #2, #3 y #4); en curso: `feat/x-device-key`
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -13,7 +13,8 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - Los cruces consumen el paso, detectan colados y activan la alarma.
 - El hub de SignalR `/hubs/eventos` envía `EstadoTorniquete` en vivo: estado, conexión del ESP32 y de la visión, y desincronización.
 - Todo vive en memoria hasta que esté la base de datos (PostgreSQL en Docker, ver "Decisiones"): **al reiniciar la API se pierde el estado**.
-- Hay 57 pruebas automatizadas (dominio y casos de uso), una por criterio de aceptación.
+- El ESP32 y la visión se identifican con la cabecera `X-Device-Key`. Por ahora en **modo tolerante**: no se rechaza nada, solo queda en el log.
+- Hay 63 pruebas automatizadas (dominio y casos de uso), una por criterio de aceptación.
 
 ## Decisiones
 
@@ -74,7 +75,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
   - Genera un `arranque` nuevo en cada reinicio: el servidor deja registrado cada reinicio en el log.
   - Tras 5 s sin latidos, el torniquete figura **sin conexión**.
   - `brazoReal` y `sirenaReal` deben ser lo que el ESP32 aplicó de verdad: si no coinciden con lo deseado durante más de 2 s, el panel marca el torniquete como **desincronizado** (RF-45 CA4).
-- **Credencial:** `X-Device-Key` todavía no se exige, pero conviene enviarla desde ya; se activa cuando los torniquetes estén en la base de datos.
+- **Credencial:** envía la cabecera `X-Device-Key` con la clave del ESP32 en las lecturas y en los latidos (en `config.json` es `deviceKey`). Te paso la clave por privado: nunca va en el repo (RNF-25). Hasta después del H1 la API no rechaza nada; desde que se active el modo estricto, sin la clave correcta todo recibe 401 `CredencialInvalida`. Ver "Credenciales de los dispositivos" más abajo.
 - **Tarjetas de prueba** (tarifa 3.200):
 
 | UID | Estado | Saldo | Respuesta |
@@ -93,6 +94,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
   - Un cruce de `salida` responde `registrado`: no consume pasos ni es fraude.
   - Un cruce de entrada consume el paso si su fotograma cae dentro de los 10 s de la ventana. Sin paso disponible, responde `fraude` con un `alertaId`.
 - **Latido** `POST /api/torniquetes/tq_1/vision/latido` cada 5 s, con `fps` y `sesionVision`. Tras 15 s sin señal, el panel muestra la visión **fuera de línea**.
+- **Credencial:** envía la cabecera `X-Device-Key` con la clave de la visión en los cruces y en los latidos; según `vision/config.yaml`, va en la variable de entorno `TG_VISION_KEY`. Es distinta de la del ESP32: la del ESP32 no sirve en las rutas de la visión, ni al revés. Mismo calendario que para Karol: tolerante hasta después del H1.
 - **RNF-06:** cada cruce deja en el log de la API una línea `RNF-06` con la hora del fotograma, la hora de llegada y el retraso en milisegundos.
 
 ### Ana — web (interfaz C6)
@@ -134,6 +136,30 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - **Ids:** los pasos y los intentos piden su id antes de guardarse (`SiguientePasoIdAsync`, `SiguienteIdAsync`). En PostgreSQL esto se resuelve con secuencias (`UseHiLo` de Npgsql).
 - Agregué el enum `TipoSoporte` (`Fisico`, `Virtual`) en `Domain/Tarjetas/` porque `IntentoAcceso` lo guarda (RF-23). También es de tu módulo.
 
+## Credenciales de los dispositivos (RNF-20)
+
+Cada torniquete tiene dos claves: una para su ESP32 y otra para su servicio de visión. La API las lee de los **secretos de usuario** de .NET, que se guardan fuera del repositorio (RNF-25).
+
+**Generar una clave** (Git Bash):
+
+```
+openssl rand -hex 32
+```
+
+**Configurarlas en la laptop que corre la API** (desde la raíz del repo):
+
+```
+dotnet user-secrets set "Dispositivos:Claves:tq_1:Esp32" "<clave del ESP32>" --project server/TransitGate.Api
+dotnet user-secrets set "Dispositivos:Claves:tq_1:Vision" "<clave de la visión>" --project server/TransitGate.Api
+```
+
+**Modo tolerante y modo estricto.** `Dispositivos:ExigirClave` en `appsettings.json`:
+
+- `false` (ahora): toda petición pasa. Si falta la clave, es incorrecta o el torniquete no tiene clave configurada, queda **una** advertencia en el log (`X-Device-Key tq_1 Esp32: Ausente`), y otra cuando vuelve a ser válida. No se registra una por latido.
+- `true` (después del H1): sin la clave correcta, 401 `{ "error": "CredencialInvalida" }`. Antes de activarlo hay que confirmar en el log que el ESP32 y la visión ya envían claves válidas.
+
+Las rutas de monitoreo (`/api/torniquetes`, intentos, alertas) no usan esta clave: esas pedirán sesión de operador cuando esté Identity. Con RF-43, las claves se generarán al registrar el torniquete y se guardarán en la base de datos.
+
 ## Mediciones (RNF-03, RNF-04 y RNF-06)
 
 El log tiene una línea por evento, con hora UTC al milisegundo:
@@ -159,7 +185,8 @@ dotnet run --project TransitGate.Api | Tee-Object -FilePath mediciones.log
 | Limitación | Cuándo se resuelve |
 | --- | --- |
 | Todo en memoria; se pierde al reiniciar | Cuando esté la base de datos (Jeisy, semana 2) |
-| Sin `X-Device-Key` ni sesión en el panel | Con la base de datos e Identity (semanas 2 y 3) |
+| `X-Device-Key` en modo tolerante | Se activa el modo estricto después del H1 (semana 3) |
+| Las rutas del panel no piden sesión | Con Identity (Jeisy, semana 3) |
 | La transacción del paso (RNF-15) está definida pero en memoria no se deshace nada si algo falla a la mitad | Cuando esté la base de datos; ahí se agrega la prueba con fallo forzado |
 | Los cruces de fraude todavía no dejan un `IntentoAcceso` con resultado `Fraude` (RF-28 CA1) | Semana 4, cuando los cruces pasen a Application |
 | Una lectura en modo registro se rechazaría como `TorniqueteOcupado` y dejaría un intento (RF-23 CA3 pide que no deje ninguno) | Semana 4, con la ruta del modo registro |
@@ -169,6 +196,9 @@ dotnet run --project TransitGate.Api | Tee-Object -FilePath mediciones.log
 | Modo registro sin ruta todavía; el desafío del celular es fijo | Semanas 4 y Fase 4 |
 
 ## Historial
+
+**14 de octubre (semana 2)**
+- `X-Device-Key` en las rutas del ESP32 y de la visión (RNF-20), en modo tolerante hasta después del H1. Una clave por dispositivo y por torniquete, en los secretos de usuario.
 
 **13 de octubre (semana 2), tercera parte**
 - Decisión: PostgreSQL local con Docker (sección "Decisiones").

@@ -2,7 +2,9 @@ using System.Text.RegularExpressions;
 using Microsoft.AspNetCore.Http.HttpResults;
 using TransitGate.Api.Contratos;
 using TransitGate.Api.Esqueleto;
+using TransitGate.Api.Seguridad;
 using TransitGate.Application.Accesos;
+using TransitGate.Application.Dispositivos;
 using TransitGate.Application.Torniquetes;
 using TransitGate.Application.Validacion;
 using TransitGate.Domain.Torniquetes;
@@ -10,21 +12,21 @@ using TransitGate.Domain.Torniquetes;
 namespace TransitGate.Api.Endpoints;
 
 /// <summary>
-/// Rutas de los dispositivos: ESP32 principal (Contrato §6) y servicio de visión (§7), más las dos de
-/// monitoreo (§8) que hacen falta para probar el flujo completo con los simuladores (RNF-38).
-/// Todavía no exigen X-Device-Key (RNF-20) ni sesión; se agregan con la base de datos e Identity.
+/// Rutas de los dispositivos: ESP32 principal (Contrato §6) y servicio de visión (§7), cada uno con su
+/// X-Device-Key (RNF-20), más las de monitoreo (§8) que hacen falta para probar el flujo completo con los
+/// simuladores (RNF-38). Las de monitoreo todavía no piden sesión; la piden cuando exista Identity.
 /// </summary>
 public static partial class DispositivosEndpoints
 {
     public static IEndpointRouteBuilder MapDispositivos(this IEndpointRouteBuilder app)
     {
-        var esp32 = app.MapGroup("/api/torniquetes/{id}").WithTags("ESP32");
+        var esp32 = app.MapGroup("/api/torniquetes/{id}").WithTags("ESP32").ExigirClaveDe(TipoDispositivo.Esp32);
         esp32.MapPost("/lecturas", RecibirLectura)
             .WithSummary("Lectura de una tarjeta física (RF-18, RF-20, RF-21, RF-22)");
         esp32.MapPost("/latido", Latido)
             .WithSummary("Latido cada 300 ms: devuelve el estado deseado (RF-45)");
 
-        var vision = app.MapGroup("/api/torniquetes/{id}").WithTags("Visión");
+        var vision = app.MapGroup("/api/torniquetes/{id}").WithTags("Visión").ExigirClaveDe(TipoDispositivo.Vision);
         vision.MapPost("/cruces", RegistrarCruce)
             .WithSummary("Cruce de la línea virtual (RF-26 a RF-29)");
         vision.MapPost("/vision/latido", LatidoVision)
