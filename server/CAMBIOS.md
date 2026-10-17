@@ -1,6 +1,6 @@
 # Cambios del servidor
 
-Responsable: Alex · Última actualización: 17 de octubre de 2026 · Todo está en `main` hasta el PR #16; en curso: `feat/firmware-esqueleto`. Los contratos están en `docs/`: Contrato de la API v1.4 y Contratos de integración v1.8
+Responsable: Alex · Última actualización: 17 de octubre de 2026 · Todo está en `main` hasta el PR #17; no hay ramas en curso. Los contratos están en `docs/`: Contrato de la API v1.4 y Contratos de integración v1.8
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -19,7 +19,9 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - El ESP32 y la visión se identifican con la cabecera `X-Device-Key`. Por ahora en **modo tolerante**: no se rechaza nada, solo queda en el log.
 - **Web completa para el MVP:** portal del cliente (registro, mi tarjeta, recargar, viajes, recargas, perfil) y panel del personal (panel en vivo y taquilla), servidos por la API en `http://<IP>:5000/`. Pensada para el celular.
 - Los números del JSON se reciben solo como números: `"pasoIdAbierto": "5"` (entre comillas) responde 400.
-- Hay 153 pruebas automatizadas: dominio, casos de uso y 16 de integración contra un PostgreSQL de verdad (en un contenedor que crean las pruebas).
+- **Firmware del ESP32 principal** (`firmware/esp32-main/`, MicroPython): reglas de C1, cliente HTTP con timeouts, WiFi, servo, sirena, LED y un lector simulado; cargado en una ESP32 real. Falta el lector PN532.
+- **`sim-esp32`** (`tools/sim-esp32/`): simula la placa en el PC con el mismo código del firmware. Con la web y la API alcanza para demostrar el H2 sin hardware.
+- Hay 165 pruebas automatizadas: 153 del servidor (dominio, casos de uso y 16 de integración contra un PostgreSQL de verdad) y 12 del firmware.
 
 ## Decisiones
 
@@ -251,6 +253,17 @@ RNF-06 tq_1 cruce trackId=1 sentido=Entrada fotograma=2026-10-14T03:59:31.061Z l
 dotnet run --project TransitGate.Api | Tee-Object -FilePath mediciones.log
 ```
 
+## Próximos pasos
+
+Lo que sigue, en orden (17 de octubre). Lo pendiente de cada integrante está en su sección de "Qué necesita saber cada uno".
+
+1. **`sim-vision`** (`tools/sim-vision/`, C11): latido cada 5 s y comandos `entrada`, `salida`, `colado`, `retraso <ms>` y `silencio <s>`. Con él y `sim-esp32` se hace el guion completo sin hardware (RNF-38). Es de Wili; si no llega pronto, lo hace Alex con el mismo enfoque que `sim-esp32`.
+2. **Lector PN532** en el firmware (`lector_pn532.py`, I2C en GPIO 21 y 22, dirección `0x24`), con la misma interfaz que `lector_simulado.py`: `leer()` devuelve el UID o `None`.
+3. **ESP32 con WiFi** de 2,4 GHz contra la API: llenar `config.json` (red, IP de la laptop, `deviceKey`) y comprobar en el panel que aparece "ESP32 en línea".
+4. **Servo y sirena** conectados a la placa y calibrados (C8).
+5. **Visión (Wili):** estado de la ESP32-CAM y de YOLO; la prueba del ángulo de la cámara es el riesgo técnico más grande (MVP §8).
+6. **Servidor:** modo estricto de `X-Device-Key`, medición de RNF-03, registrar quién apagó la alarma y, en la semana 6, RF-46.
+
 ## Limitaciones actuales
 
 | Limitación | Cuándo se resuelve |
@@ -263,6 +276,8 @@ dotnet run --project TransitGate.Api | Tee-Object -FilePath mediciones.log
 | El desafío del celular es fijo | Fase 4 |
 | En la práctica hay un solo rol de personal: el Operador puede todo lo del panel (MVP §3.1), así que RF-06 CA3 (taquilla sin apagar alarmas) todavía no aplica | Entrega final |
 | No hay recuperación de contraseña (RF-04) ni administración de operadores (RF-42) | Después del MVP (Should) |
+| No hay visión ni `sim-vision`: sin ellos no hay cruces, así que el paso solo se cierra por vencimiento y no se puede demostrar el colado (paso 8) | `sim-vision` en la semana 3; la visión real, Wili |
+| El firmware usa un lector simulado | Con el PN532 (18 de octubre) |
 
 ## Historial
 
