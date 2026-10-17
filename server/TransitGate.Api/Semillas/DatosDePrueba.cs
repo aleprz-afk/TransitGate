@@ -1,7 +1,7 @@
 using TransitGate.Domain.Clientes;
 using TransitGate.Domain.Tarjetas;
 
-namespace TransitGate.Api.Esqueleto;
+namespace TransitGate.Api.Semillas;
 
 /// <summary>Clientes de prueba (sección DatosDePrueba de appsettings.json); se cargan en memoria al arrancar.</summary>
 public sealed class DatosDePrueba

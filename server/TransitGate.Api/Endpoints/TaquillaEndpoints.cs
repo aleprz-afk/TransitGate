@@ -1,23 +1,23 @@
 using Microsoft.AspNetCore.Http.HttpResults;
 using TransitGate.Api.Contratos;
+using TransitGate.Api.Seguridad;
 using TransitGate.Application.Taquilla;
 using TransitGate.Application.Torniquetes;
 
 namespace TransitGate.Api.Endpoints;
 
 /// <summary>
-/// Entrega de la tarjeta física en taquilla (Contrato §4 y §8, RF-09, RF-10, RF-36). Las usa el operador;
-/// todavía no piden sesión, la piden cuando exista Identity.
+/// Entrega de la tarjeta física en taquilla (Contrato §4 y §8, RF-09, RF-10, RF-36), con sesión del personal.
 /// </summary>
 public static class TaquillaEndpoints
 {
     public static IEndpointRouteBuilder MapTaquilla(this IEndpointRouteBuilder app)
     {
-        var taquilla = app.MapGroup("/api").WithTags("Taquilla");
+        var taquilla = app.MapGroup("/api").WithTags("Taquilla").RequireAuthorization(Politicas.Personal);
         taquilla.MapGet("/tarjetas/solicitudes", ListarSolicitudes)
-            .WithSummary("Solicitudes de tarjeta física pendientes, la más antigua primero; ?documento= para buscar una (RF-36). Sin sesión hasta que exista Identity");
+            .WithSummary("Solicitudes de tarjeta física pendientes, la más antigua primero; ?documento= para buscar una (RF-36)");
         taquilla.MapPost("/torniquetes/{id}/modo-registro", ActivarModoRegistro)
-            .WithSummary("Pone el lector en modo registro para entregar la tarjeta de una solicitud (RF-09, S6). Sin sesión hasta que exista Identity");
+            .WithSummary("Pone el lector en modo registro para entregar la tarjeta de una solicitud (RF-09, S6)");
 
         return app;
     }

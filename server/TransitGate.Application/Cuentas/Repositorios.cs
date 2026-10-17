@@ -22,10 +22,17 @@ public interface ITarjetaRepositorio
 {
     Task AgregarAsync(Tarjeta tarjeta, CancellationToken ct = default);
 
+    /// <summary>
+    /// Para cambiar el saldo: se pide con el CerrojoTarjetas tomado, así se lee el saldo vigente y no uno
+    /// que otra petición ya cambió (RNF-16).
+    /// </summary>
     Task<Tarjeta?> ObtenerAsync(Guid tarjetaId, CancellationToken ct = default);
 
-    /// <summary>Un cliente tiene exactamente una (RF-07).</summary>
+    /// <summary>Solo para leer: un cliente tiene exactamente una (RF-07). Para cambiar el saldo, ObtenerAsync.</summary>
     Task<Tarjeta?> DelClienteAsync(Guid clienteId, CancellationToken ct = default);
+
+    /// <summary>El cliente dueño de la tarjeta, sin cargarla.</summary>
+    Task<Guid?> ClienteDeAsync(Guid tarjetaId, CancellationToken ct = default);
 }
 
 public interface ISoporteRepositorio

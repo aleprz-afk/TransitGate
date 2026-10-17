@@ -41,6 +41,9 @@ internal sealed class TarjetasFalsas : ITarjetaRepositorio
 
     public Task<Tarjeta?> DelClienteAsync(Guid clienteId, CancellationToken ct = default) =>
         Task.FromResult(Guardadas.FirstOrDefault(t => t.ClienteId == clienteId));
+
+    public Task<Guid?> ClienteDeAsync(Guid tarjetaId, CancellationToken ct = default) =>
+        Task.FromResult(Guardadas.FirstOrDefault(t => t.Id == tarjetaId)?.ClienteId);
 }
 
 internal sealed class SoportesFalsos : ISoporteRepositorio

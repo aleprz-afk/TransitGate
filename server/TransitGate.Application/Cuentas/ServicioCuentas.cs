@@ -28,17 +28,16 @@ public sealed class ServicioCuentas(
 
     public async Task<ResultadoDebito> DebitarAsync(Guid tarjetaId, decimal monto, long pasoId)
     {
-        var tarjeta = await tarjetas.ObtenerAsync(tarjetaId)
-            ?? throw new InvalidOperationException($"No existe la tarjeta {tarjetaId}.");
-
         using (await cerrojo.TomarAsync(tarjetaId))
         {
+            var tarjeta = await tarjetas.ObtenerAsync(tarjetaId)
+                ?? throw new InvalidOperationException($"No existe la tarjeta {tarjetaId}.");
             if (!tarjeta.Debitar(monto))
                 return new ResultadoDebito(false, tarjeta.Saldo);
-        }
 
-        await debitos.AgregarAsync(new DebitoPaso(pasoId, tarjetaId, monto, reloj.GetUtcNow().UtcDateTime));
-        return new ResultadoDebito(true, tarjeta.Saldo);
+            await debitos.AgregarAsync(new DebitoPaso(pasoId, tarjetaId, monto, reloj.GetUtcNow().UtcDateTime));
+            return new ResultadoDebito(true, tarjeta.Saldo);
+        }
     }
 
     public async Task RevertirAsync(long pasoId)
@@ -46,9 +45,9 @@ public sealed class ServicioCuentas(
         if (await debitos.PorPasoAsync(pasoId) is not { } debito)
             return;
 
-        var tarjeta = await tarjetas.ObtenerAsync(debito.TarjetaId);
         using (await cerrojo.TomarAsync(debito.TarjetaId))
         {
+            var tarjeta = await tarjetas.ObtenerAsync(debito.TarjetaId);
             if (debito.Revertir(reloj.GetUtcNow().UtcDateTime))
                 tarjeta!.Acreditar(debito.Monto);
         }
@@ -85,14 +84,14 @@ public sealed class ServicioCuentas(
 
     private async Task<SoporteResuelto> ResolverAsync(SoporteTarjeta soporte)
     {
-        var tarjeta = await tarjetas.ObtenerAsync(soporte.TarjetaId);
-        return new SoporteResuelto(soporte.Id, soporte.TarjetaId, tarjeta!.ClienteId, soporte.Estado);
+        var clienteId = await tarjetas.ClienteDeAsync(soporte.TarjetaId);
+        return new SoporteResuelto(soporte.Id, soporte.TarjetaId, clienteId!.Value, soporte.Estado);
     }
 
     private async Task<SolicitudPendiente> PendienteAsync(SoporteTarjeta soporte)
     {
-        var tarjeta = await tarjetas.ObtenerAsync(soporte.TarjetaId);
-        var cliente = await clientes.ObtenerAsync(tarjeta!.ClienteId);
+        var clienteId = await tarjetas.ClienteDeAsync(soporte.TarjetaId);
+        var cliente = await clientes.ObtenerAsync(clienteId!.Value);
         return new SolicitudPendiente(soporte.Id, cliente!.Id, cliente.NombreCompleto, cliente.NumeroDocumento, soporte.FechaSolicitud);
     }
 }

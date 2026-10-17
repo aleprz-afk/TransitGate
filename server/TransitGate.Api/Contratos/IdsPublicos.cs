@@ -22,6 +22,10 @@ public static class IdsPublicos
 
     public static string Cliente(Guid id) => $"c_{id:N}";
 
+    public static string Tarjeta(Guid id) => $"t_{id:N}";
+
+    public static string Recarga(long id) => $"r_{id}";
+
     public static bool TrySolicitud(string? texto, out Guid id)
     {
         id = Guid.Empty;

@@ -25,13 +25,15 @@ public sealed class Recargar(
             return ErrorCuenta.Invalido(
                 "MontoFueraDeRango",
                 $"El monto debe estar entre {parametros.MontoMinRecarga:N0} y {parametros.MontoMaxRecarga:N0} COP.");
-        if (await tarjetas.DelClienteAsync(clienteId, ct) is not { } tarjeta)
+        if (await tarjetas.DelClienteAsync(clienteId, ct) is not { } suTarjeta)
             return ErrorCuenta.TarjetaNoEncontrada;
 
         var clave = string.IsNullOrWhiteSpace(claveIdempotencia) ? null : claveIdempotencia.Trim();
         Recarga recarga;
-        using (await cerrojo.TomarAsync(tarjeta.Id, ct))
+        Tarjeta tarjeta;
+        using (await cerrojo.TomarAsync(suTarjeta.Id, ct))
         {
+            tarjeta = (await tarjetas.ObtenerAsync(suTarjeta.Id, ct))!;
             if (clave is not null && await recargas.PorClaveAsync(tarjeta.Id, clave, ct) is { } previa)
                 return previa;
 

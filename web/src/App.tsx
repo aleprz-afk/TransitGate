@@ -1,94 +1,89 @@
-import { useEffect, useState } from 'react'
-import { api, type AlertaResumen } from './api/cliente'
-import { conectarEventos, type EstadoTorniqueteEvento, type IntentoRegistradoEvento } from './api/eventos'
-import { horaColombia } from './hora'
+import { useEffect, useState, type FormEvent } from 'react'
+import { api } from './api/cliente'
+import type { components } from './api/esquema'
+import Panel from './Panel'
 
-// Página de prueba del esqueleto: comprueba el proxy, los tipos del OpenAPI y SignalR.
-// Es el punto de partida del panel de operación (HU-19 a HU-22); Ana la reemplaza por las páginas reales.
+// Página de prueba: con sesión del personal muestra el panel; con sesión de cliente, su saldo.
+// Sirve para probar la sesión (cookie de Identity) y los permisos; Ana la reemplaza por las páginas reales.
 
-type Conexion = 'Conectando' | 'Conectado' | 'Reconectando' | 'Desconectado'
+type Sesion = components['schemas']['RespuestaSesion']
+type MiTarjeta = components['schemas']['MiTarjetaJson']
 
 export default function App() {
-  const [conexion, setConexion] = useState<Conexion>('Conectando')
-  const [torniquetes, setTorniquetes] = useState<Record<string, EstadoTorniqueteEvento>>({})
-  const [intentos, setIntentos] = useState<IntentoRegistradoEvento[]>([])
-  const [alertas, setAlertas] = useState<AlertaResumen[]>([])
-
-  async function cargarAlertas() {
-    const { data } = await api.GET('/api/alertas', { params: { query: { estado: 'Abierta' } } })
-    if (data) setAlertas(data)
-  }
+  // undefined: todavía no se sabe; null: sin sesión.
+  const [sesion, setSesion] = useState<Sesion | null | undefined>(undefined)
 
   useEffect(() => {
-    // Al conectarse, el hub manda el estado actual de cada torniquete; después, uno por cambio.
-    const hub = conectarEventos({
-      EstadoTorniquete: (e) => setTorniquetes((t) => ({ ...t, [e.torniqueteId]: e })),
-      IntentoRegistrado: (e) => setIntentos((l) => [e, ...l].slice(0, 20)),
-      AlertaNueva: () => void cargarAlertas(),
-      AlertaActualizada: () => void cargarAlertas(),
-    })
-    // En desarrollo, StrictMode monta el efecto dos veces: la primera conexión se cierra durante la
-    // negociación (la consola lo muestra como error) y sus avisos ya no deben cambiar el estado.
-    let vigente = true
-    const marcar = (estado: Conexion) => vigente && setConexion(estado)
-    hub.onreconnecting(() => marcar('Reconectando'))
-    hub.onreconnected(() => marcar('Conectado'))
-    hub.onclose(() => marcar('Desconectado'))
-    hub.start().then(
-      () => marcar('Conectado'),
-      () => marcar('Desconectado'),
-    )
-    void cargarAlertas()
-    return () => {
-      vigente = false
-      void hub.stop()
-    }
+    // Al recargar la página, la cookie sigue: se pregunta quién es (401 si no hay sesión).
+    api.GET('/api/auth/sesion').then(({ data }) => setSesion(data ?? null))
   }, [])
 
-  async function apagarAlarma(alertaId: string) {
-    await api.POST('/api/alertas/{id}/apagar-alarma', { params: { path: { id: alertaId } } })
+  async function salir() {
+    await api.POST('/api/auth/logout')
+    setSesion(null)
+  }
+
+  if (sesion === undefined) return <main className="nota">Cargando…</main>
+  if (sesion === null) return <Login alEntrar={setSesion} />
+  if (sesion.rol === 'Cliente') return <Cliente nombre={sesion.nombre} alSalir={salir} />
+  return <Panel nombre={sesion.nombre} alSalir={salir} />
+}
+
+function Login({ alEntrar }: { alEntrar: (sesion: Sesion) => void }) {
+  const [correo, setCorreo] = useState('')
+  const [password, setPassword] = useState('')
+  const [error, setError] = useState<string>()
+
+  async function entrar(evento: FormEvent) {
+    evento.preventDefault()
+    const { data, error } = await api.POST('/api/auth/login', { body: { correo, password } })
+    if (data) alEntrar(data)
+    else setError((error as { mensaje?: string } | undefined)?.mensaje ?? 'No se pudo iniciar sesión.')
   }
 
   return (
     <main>
       <h1>TransitGate</h1>
-      <p className="nota">Panel de prueba · tiempo real: {conexion}</p>
+      <form className="formulario" onSubmit={entrar}>
+        <label>
+          Correo
+          <input type="email" value={correo} onChange={(e) => setCorreo(e.target.value)} autoComplete="username" required />
+        </label>
+        <label>
+          Contraseña
+          <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="current-password" required />
+        </label>
+        {error && <p className="error">{error}</p>}
+        <button type="submit">Iniciar sesión</button>
+      </form>
+    </main>
+  )
+}
 
-      <h2>Torniquetes</h2>
-      {Object.values(torniquetes).length === 0 && <p className="nota">Sin datos todavía.</p>}
-      <ul className="lista">
-        {Object.values(torniquetes).map((t) => (
-          <li key={t.torniqueteId} className={t.estado === 'Alarma' ? 'alarma' : undefined}>
-            <strong>{t.torniqueteId}</strong> · {t.estado} desde {horaColombia(t.estadoDesde)}
+function Cliente({ nombre, alSalir }: { nombre: string; alSalir: () => void }) {
+  const [tarjeta, setTarjeta] = useState<MiTarjeta>()
+
+  useEffect(() => {
+    api.GET('/api/tarjetas/mi-tarjeta').then(({ data }) => setTarjeta(data))
+  }, [])
+
+  return (
+    <main>
+      <h1>TransitGate</h1>
+      <p className="nota">
+        Portal de prueba · {nombre} · <button onClick={alSalir}>Cerrar sesión</button>
+      </p>
+      {tarjeta && (
+        <ul className="lista">
+          <li>
+            Saldo: <strong>{tarjeta.saldo.toLocaleString('es-CO')}</strong>
             <br />
-            ESP32 {t.esp32Conectado ? 'en línea' : `fuera de línea desde ${horaColombia(t.ultimaSenal)}`} ·
-            visión {t.visionConectada ? 'en línea' : 'fuera de línea'}
-            {t.desincronizado && ' · desincronizado'}
+            {tarjeta.soporte
+              ? `${tarjeta.soporte.tipo === 'fisico' ? 'Tarjeta física' : 'Celular'}: ${tarjeta.soporte.estado}`
+              : 'Sin tarjeta física todavía'}
           </li>
-        ))}
-      </ul>
-
-      <h2>Alertas abiertas</h2>
-      {alertas.length === 0 && <p className="nota">Ninguna.</p>}
-      <ul className="lista">
-        {alertas.map((a) => (
-          <li key={a.alertaId} className="alarma">
-            {a.torniqueteId} · {horaColombia(a.fecha)}{' '}
-            <button onClick={() => void apagarAlarma(a.alertaId)}>Apagar alarma</button>
-          </li>
-        ))}
-      </ul>
-
-      <h2>Intentos recientes</h2>
-      {intentos.length === 0 && <p className="nota">Llegan en vivo desde que se abre la página.</p>}
-      <ul className="lista">
-        {intentos.map((i) => (
-          <li key={i.intentoId}>
-            {horaColombia(i.fecha)} · {i.torniqueteId} · {i.resultado}
-            {i.motivo && ` (${i.motivo})`}
-          </li>
-        ))}
-      </ul>
+        </ul>
+      )}
     </main>
   )
 }
