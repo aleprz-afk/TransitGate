@@ -56,4 +56,4 @@ Cada línea del log empieza con su tema: `[red]`, `[lectura]`, `[brazo]`, `[sire
 python -m unittest discover -s firmware/esp32-main/pruebas
 ```
 
-`api.py` y `controlador.py` también corren en el PC con CPython: sirven para probar contra la API local sin la ESP32.
+`api.py` y `controlador.py` también corren en el PC con CPython. `tools/sim-esp32` los usa para simular la placa completa contra la API.

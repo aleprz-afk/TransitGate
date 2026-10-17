@@ -23,6 +23,7 @@ class Controlador:
         self.paso_id_abierto = None
         self.modo_registro = False
         self.conectado = False
+        self.desafio = None   # el último que mandó el servidor, para el celular (Fase 4)
         self._repeticion_uid_ms = repeticion_uid_ms
         self._cierre_sin_conexion_ms = cierre_sin_conexion_ms
         self._contador = 0
@@ -48,9 +49,12 @@ class Controlador:
         self._ultimo_uid_ms = ahora
         if repetido:
             return None
+        return self.nuevo_lectura_id()
 
+    def nuevo_lectura_id(self):
+        """RF-18: arranque + contador de 4 dígitos (a1f3-0007)."""
         self._contador = (self._contador + 1) % 10000
-        return "%s-%04d" % (self.arranque, self._contador)   # RF-18: arranque + contador de 4 dígitos
+        return "%s-%04d" % (self.arranque, self._contador)
 
     def resultado_lectura(self, respuesta):
         """
@@ -89,6 +93,7 @@ class Controlador:
         self.brazo_deseado = respuesta.get("brazoDeseado") == "abierto"
         self.sirena_deseada = bool(respuesta.get("sirenaDeseada"))
         self.modo_registro = bool(respuesta.get("modoRegistro"))
+        self.desafio = respuesta.get("desafio")
         if not self.brazo_deseado:
             self.paso_id_abierto = None
 

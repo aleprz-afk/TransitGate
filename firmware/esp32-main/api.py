@@ -19,6 +19,7 @@ class Api:
         host, _, puerto = direccion.partition(":")
         self._host = host
         self._puerto = int(puerto or 80)
+        self.torniquete_id = torniquete_id
         self._base = "/api/torniquetes/" + torniquete_id
         self._clave = clave
         self._direccion = None   # se resuelve una vez y se reusa
@@ -28,6 +29,12 @@ class Api:
 
     def lectura(self, lectura_id, uid, timeout_ms):
         return self._post(self._base + "/lecturas", {"lecturaId": lectura_id, "tipo": "uid", "valor": uid}, timeout_ms)
+
+    def lectura_celular(self, lectura_id, soporte_id, desafio_id, firma_hex, timeout_ms):
+        """Contrato API §6.2 (Fase 4): lo que respondió la app del celular al desafío vigente."""
+        cuerpo = {"lecturaId": lectura_id, "tipo": "celular", "soporteId": soporte_id,
+                  "desafioId": desafio_id, "firma": firma_hex}
+        return self._post(self._base + "/lecturas", cuerpo, timeout_ms)
 
     def _post(self, ruta, cuerpo, timeout_ms):
         """Devuelve (estado HTTP, JSON). Lanza SinRespuesta si no hay respuesta completa dentro del plazo."""
