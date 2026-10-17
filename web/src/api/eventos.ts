@@ -1,11 +1,12 @@
-import * as signalR from '@microsoft/signalr'
-
 // Eventos del hub /hubs/eventos (Contratos de integración, C6). El OpenAPI no describe SignalR,
 // así que estos tipos se mantienen a mano: si cambia el contrato, cambian aquí.
+// La conexión la abre TiempoReal (src/tiempoReal.tsx) cuando hay sesión; las páginas se suscriben con useEvento.
 
 export type EstadoTorniquete = 'Cerrado' | 'EsperandoCruce' | 'Alarma' | 'ModoRegistro'
 export type ResultadoIntento = 'Exitoso' | 'Rechazado' | 'Fraude'
 export type EstadoAlerta = 'Abierta' | 'Atendida' | 'Resuelta'
+
+// Grupo "operacion": solo el personal.
 
 export interface EstadoTorniqueteEvento {
   torniqueteId: string
@@ -52,7 +53,7 @@ export interface SolicitudNuevaEvento {
   fecha: string
 }
 
-// Grupo del cliente: solo los recibe el dueño de la tarjeta, cuando haya sesión (Identity).
+// Grupo del cliente: solo los recibe el dueño de la tarjeta.
 
 export interface SaldoActualizadoEvento {
   saldo: number
@@ -70,28 +71,25 @@ export interface EventoViajeEvento {
   fecha: string
 }
 
-export interface ManejadoresEventos {
-  EstadoTorniquete?: (e: EstadoTorniqueteEvento) => void
-  IntentoRegistrado?: (e: IntentoRegistradoEvento) => void
-  AlertaNueva?: (e: AlertaNuevaEvento) => void
-  AlertaActualizada?: (e: AlertaActualizadaEvento) => void
-  RegistroTarjeta?: (e: RegistroTarjetaEvento) => void
-  SolicitudNueva?: (e: SolicitudNuevaEvento) => void
-  SaldoActualizado?: (e: SaldoActualizadoEvento) => void
-  EventoViaje?: (e: EventoViajeEvento) => void
+/** Cada evento del hub con el tipo de su contenido. */
+export interface Eventos {
+  EstadoTorniquete: EstadoTorniqueteEvento
+  IntentoRegistrado: IntentoRegistradoEvento
+  AlertaNueva: AlertaNuevaEvento
+  AlertaActualizada: AlertaActualizadaEvento
+  RegistroTarjeta: RegistroTarjetaEvento
+  SolicitudNueva: SolicitudNuevaEvento
+  SaldoActualizado: SaldoActualizadoEvento
+  EventoViaje: EventoViajeEvento
 }
 
-/** Abre la conexión al hub y registra los manejadores. Devuelve la conexión para cerrarla con stop(). */
-export function conectarEventos(manejadores: ManejadoresEventos) {
-  const conexion = new signalR.HubConnectionBuilder()
-    .withUrl('/hubs/eventos')
-    .withAutomaticReconnect()
-    .configureLogging(signalR.LogLevel.Warning)
-    .build()
-
-  for (const [evento, manejador] of Object.entries(manejadores)) {
-    if (manejador) conexion.on(evento, manejador)
-  }
-
-  return conexion
-}
+export const nombresEventos: (keyof Eventos)[] = [
+  'EstadoTorniquete',
+  'IntentoRegistrado',
+  'AlertaNueva',
+  'AlertaActualizada',
+  'RegistroTarjeta',
+  'SolicitudNueva',
+  'SaldoActualizado',
+  'EventoViaje',
+]

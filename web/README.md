@@ -1,8 +1,18 @@
 ﻿# web
 
-Portal del cliente y panel de operación en React (Vite + TypeScript). Dueña: Ana.
+Portal del cliente y panel de operación en React (Vite + TypeScript, React Router). Pensada primero para el celular (360 px, RNF-31), con modo oscuro.
 
-Por ahora hay una página de prueba: `src/App.tsx` pide iniciar sesión y, según el rol, muestra el panel (`src/Panel.tsx`: torniquetes, alertas abiertas e intentos en vivo) o el saldo del cliente. Sirve para comprobar que el proxy, la sesión, los tipos y SignalR funcionan, y se reemplaza por las páginas reales.
+| Ruta | Quién | Qué hace |
+| --- | --- | --- |
+| `/entrar`, `/registro` | Todos | Inicio de sesión (RF-02) y registro con la autorización de datos (RF-01, RNF-28) |
+| `/mi-tarjeta` | Cliente | Saldo en vivo, estado de la tarjeta, pedir la física (RF-08), confirmar la recepción (RF-11) y el último viaje (RF-16) |
+| `/recargar` | Cliente | Recarga con pago simulado, montos sugeridos y `Idempotency-Key` (RF-15) |
+| `/viajes`, `/recargas` | Cliente | Historiales, el más reciente primero (RF-39, RF-17) |
+| `/perfil` | Cliente | Datos y cambio de teléfono (RF-05) |
+| `/panel` | Personal | Torniquetes, conexión de los dispositivos, alertas con "Apagar alarma" e intentos en vivo (RF-31 a RF-34, RF-37) |
+| `/taquilla` | Personal | Solicitudes pendientes, búsqueda por documento y entrega con el modo registro (RF-36, RF-09, RF-10) |
+
+Cada ruta pide su rol; la API lo vuelve a comprobar (RF-06). `/` lleva a cada uno a su inicio.
 
 ## Desarrollo
 
@@ -39,9 +49,16 @@ Para el panel: el correo y la contraseña del operador están en los secretos de
 npm run tipos
 ```
 
-- `src/api/cliente.ts`: cliente HTTP tipado (`openapi-fetch`). Ejemplo: `api.GET('/api/torniquetes')`.
-- `src/api/eventos.ts`: conexión al hub `/hubs/eventos` y tipos de sus eventos. El OpenAPI no describe SignalR, así que estos tipos van a mano y siguen el contrato C6.
-- `src/hora.ts`: las horas llegan en UTC y se muestran en hora de Colombia (RNF-42).
+## Estructura
+
+- `src/api/cliente.ts`: cliente HTTP tipado (`openapi-fetch`). Si una ruta responde 401 (la sesión venció), la web vuelve a `/entrar`. `mensajeDe(error)` saca el mensaje en español del cuerpo de error.
+- `src/api/eventos.ts`: tipos de los eventos del hub. El OpenAPI no describe SignalR, así que van a mano y siguen el contrato C6.
+- `src/sesion.tsx`: la sesión (`useSesion`): quién está, entrar y salir.
+- `src/tiempoReal.tsx`: una sola conexión al hub mientras hay sesión. Cada página escucha lo suyo con `useEvento('SaldoActualizado', e => …)`.
+- `src/textos.ts`: horas en hora de Colombia (RNF-42), pesos y los códigos de la API en español claro (motivos, estados; RNF-32).
+- `src/paginas/`: una página por ruta, en `cliente/` y `personal/`.
+
+En la demo, el celular entra por `http://<IP>:5000`, que no es un contexto seguro: `crypto.randomUUID` no existe ahí. Por eso la clave de idempotencia sale de `crypto.getRandomValues`.
 
 ## Demo
 
