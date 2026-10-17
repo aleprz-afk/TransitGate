@@ -1,6 +1,6 @@
 # Cambios del servidor
 
-Responsable: Alex · Última actualización: 16 de octubre de 2026 · Todo está en `main` hasta el PR #12; en curso, una encima de otra: `feat/modo-registro`, `feat/cuentas-tarjetas-saldo` y `feat/postgres-identity`. Los contratos están en `docs/`: Contrato de la API v1.4 y Contratos de integración v1.7
+Responsable: Alex · Última actualización: 16 de octubre de 2026 · Todo está en `main` hasta el PR #15; en curso: `feat/web-portal-y-panel`. Los contratos están en `docs/`: Contrato de la API v1.4 y Contratos de integración v1.7
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -17,7 +17,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - **Base de datos:** todo se guarda en PostgreSQL (Docker, en la misma laptop): **reiniciar la API ya no borra nada**. Solo el estado de cada torniquete vive en memoria y arranca en `Cerrado`. La API necesita Docker Desktop abierto y su cadena de conexión (ver "Base de datos" en `server/README.md`).
 - **Sesión:** el panel, la taquilla y el portal piden sesión (cookie de Identity); sin sesión, 401. Hay una cuenta semilla de operador y otra de administrador.
 - El ESP32 y la visión se identifican con la cabecera `X-Device-Key`. Por ahora en **modo tolerante**: no se rechaza nada, solo queda en el log.
-- La API sirve la web (React) en el mismo puerto: `http://<IP>:5000/`. El proyecto de la web ya está en `web/`, con el proxy de desarrollo, los tipos generados desde el OpenAPI y una página de prueba del panel.
+- **Web completa para el MVP:** portal del cliente (registro, mi tarjeta, recargar, viajes, recargas, perfil) y panel del personal (panel en vivo y taquilla), servidos por la API en `http://<IP>:5000/`. Pensada para el celular.
 - Los números del JSON se reciben solo como números: `"pasoIdAbierto": "5"` (entre comillas) responde 400.
 - Hay 153 pruebas automatizadas: dominio, casos de uso y 16 de integración contra un PostgreSQL de verdad (en un contenedor que crean las pruebas).
 
@@ -112,8 +112,9 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 
 - **Proyecto listo en `web/`** (Vite + React + TypeScript). Para empezar: API arriba en el 5000, luego `npm install` y `npm run dev` en `web/`, y abrir `http://localhost:5173`. El proxy de Vite reenvía `/api`, `/hubs`, `/openapi` y `/scalar` a la API, así que no hace falta CORS. Los detalles están en `web/README.md`.
 - **Tipos:** `src/api/esquema.d.ts` se genera con `npm run tipos` (con la API arriba) y está en el repositorio. `src/api/cliente.ts` exporta `api`, un cliente tipado: `api.GET('/api/torniquetes')`, `api.POST('/api/alertas/{id}/apagar-alarma', { params: { path: { id } } })`. Los enteros (`intentoId`, `pasoId`) salen como `number`.
-- **SignalR:** `src/api/eventos.ts` tiene `conectarEventos({ EstadoTorniquete, IntentoRegistrado, AlertaNueva, AlertaActualizada })` y los tipos de cada evento, escritos a mano porque el OpenAPI no describe el hub. Si cambia un evento, te aviso y se cambian ahí.
-- **Página de prueba:** `src/App.tsx` pide iniciar sesión y, según el rol, muestra el panel (`src/Panel.tsx`: torniquetes, alertas abiertas con el botón de apagar e intentos en vivo) o el saldo del cliente. Está probada con lecturas, un colado, apagando la alarma y con una clienta registrada; también en 375 px de ancho. Es para reemplazarla por las páginas reales (no hay router todavía: elige tú la librería).
+- **La web ya cubre todo lo que tiene la API (16 de octubre):** las pantallas de la tabla de `web/README.md` están hechas y probadas con el guion completo, a 375 px. Las construí yo para llegar al H2; tú quedas como dueña: revisa el PR, cambia lo que quieras del diseño y toma la QA del MVP: RNF-31 en un celular real, RNF-33 en los navegadores, RNF-30 con 5 usuarios y RNF-32 (que cada mensaje se entienda).
+- **Cómo está armada:** `useSesion()` para la sesión, `useEvento('Nombre', e => …)` para escuchar el hub (una sola conexión mientras hay sesión) y `src/textos.ts` para pasar los códigos de la API a español claro. Detalles en `web/README.md`.
+- **Pendientes de la web:** filtros por fecha del historial (RF-40) y la clasificación de alertas (RF-35), que van después del MVP; las pantallas de administración (RF-41 a RF-44), cuando la API las tenga.
 - **Sesión (Contrato §2):** `POST /api/auth/login { correo, password }` deja la cookie y responde `{ rol, nombre }`; `GET /api/auth/sesion` dice quién está al recargar (401 si nadie); `POST /api/auth/logout`. Sin sesión, toda ruta protegida responde 401 `SesionRequerida`, y con otro rol, 403 `SinPermiso`; la API nunca redirige. Tras 6 intentos fallidos responde 401 `LoginBloqueado` por 5 minutos. El correo y la contraseña del operador te los paso por privado (están en los secretos de usuario).
 - **Demo:** `npm run build` deja la web en `server/TransitGate.Api/wwwroot`, que no se sube al repositorio. La API la sirve en `http://<IP>:5000/` y devuelve `index.html` para cualquier ruta que no sea de la API, así funcionan las rutas de React Router al recargar. Si `wwwroot` no existía cuando arrancó la API, hay que reiniciarla.
 - **SignalR:** hub `/hubs/eventos`, evento `EstadoTorniquete`. Son los campos del contrato C6 más dos horas para HU-20, `estadoDesde` y `ultimaSenal`:
@@ -259,6 +260,10 @@ dotnet run --project TransitGate.Api | Tee-Object -FilePath mediciones.log
 | No hay recuperación de contraseña (RF-04) ni administración de operadores (RF-42) | Después del MVP (Should) |
 
 ## Historial
+
+**16 de octubre (semana 2), quinta parte**
+- Web completa para el MVP con React Router: inicio de sesión, registro, mi tarjeta (saldo en vivo, pedir y confirmar la física), recargar, viajes, recargas, perfil, panel en vivo y taquilla con modo registro.
+- La sesión y el hub se comparten en toda la web (`useSesion`, `useEvento`); si la sesión vence, vuelve a `/entrar`.
 
 **16 de octubre (semana 2), cuarta parte**
 - PostgreSQL con Docker (`docker-compose.yml`) y EF Core en `TransitGate.Infrastructure`, con la migración inicial; la API la aplica al arrancar y carga las semillas.
