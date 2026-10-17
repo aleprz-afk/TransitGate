@@ -480,3 +480,6 @@ $RECYCLE.BIN/
 
 # Vim temporary swap files
 *.swp
+
+# Web compilada (npm run build en web/); se genera en la laptop de la demo
+server/TransitGate.Api/wwwroot/
