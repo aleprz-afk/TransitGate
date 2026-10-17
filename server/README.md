@@ -10,6 +10,7 @@ dotnet run --project TransitGate.Api
 
 La API escucha en `http://0.0.0.0:5000` (contratos de integración §9), así que el ESP32 y la visión la alcanzan por la IP de la laptop. La primera vez Windows pregunta por el firewall: permitir en red **Privada**.
 
+- Web (después de `npm run build` en `web/`): `http://localhost:5000/`
 - Salud: `http://localhost:5000/api/salud`
 - Documentación (Scalar): `http://localhost:5000/scalar`
 - Pruebas: `dotnet test`
@@ -31,6 +32,7 @@ Mientras no hay base de datos, todo vive en memoria (`TransitGate.Api/Esqueleto`
 | Hub `/hubs/eventos` | Evento `EstadoTorniquete` en vivo al grupo `operacion` (sin sesión todavía) |
 | `GET /api/alertas?estado=` | Alertas de colado, opcionalmente por estado (sin sesión todavía) |
 | `POST /api/alertas/{id}/apagar-alarma` | Apaga la alarma y deja la alerta Atendida (sin sesión todavía) |
+| Cualquier otra ruta | La web compilada en `wwwroot` (`index.html`); una ruta desconocida bajo `/api` responde 404 |
 
 Tarjetas de prueba (sección `DatosDePrueba` de `appsettings.json`, tarifa 3.200):
 
