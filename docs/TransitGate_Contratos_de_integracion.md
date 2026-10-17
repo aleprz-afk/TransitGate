@@ -1,6 +1,8 @@
-# TransitGate — Contratos de integración (v1.4)
+# TransitGate — Contratos de integración (v1.5)
 
 El [`TransitGate_Contrato_API.md`](./TransitGate_Contrato_API.md) define las rutas HTTP del servidor. Este documento define todo lo demás que dos integrantes distintos deben construir de forma compatible: el protocolo NFC entre la app y el lector, el stream de la cámara, los pines del hardware, los archivos de configuración, los eventos en tiempo real, el contrato interno entre los dos módulos del servidor y los simuladores. Si un integrante cambia algo de aquí sin avisar, se rompe el trabajo de otro.
+
+**Cambios en v1.5 (16 oct 2026):** C6 — `npm run build` deja la web directamente en `wwwroot` de `TransitGate.Api` (ya no hay que copiarla); el proxy de Vite también reenvía `/openapi` y `/scalar`, y la dirección de la API se puede cambiar con `API_URL`. Las rutas de la API que no existen siguen respondiendo 404 y no `index.html`.
 
 **Cambios en v1.4 (14 oct 2026):** C7 — `INotificador` agrega `IntentoRegistradoAsync` y `AlertaActualizadaAsync`; `AlertaNuevaAsync` recibe la alerta en lugar de su id, por la misma razón que `EstadoTorniqueteAsync`. El contenido de los eventos de la sección 6 no cambia.
 
@@ -156,18 +158,22 @@ Las rutas están en el Contrato API §7.
 
 ## 6. C6 — Web ↔ API: tiempo real (SignalR)
 
-**Decisión de integración:** la web (portal del cliente y panel de operación) se construye en **React con Vite**. Para la demo, el resultado de `npm run build` se copia a `wwwroot` de `TransitGate.Api` y la API lo sirve en el mismo puerto (`http://<laptop>:5000`) con `UseStaticFiles()` y `MapFallbackToFile("index.html")`. Así no hay CORS y la cookie de sesión funciona igual en el portal y en el hub.
+**Decisión de integración:** la web (portal del cliente y panel de operación) se construye en **React con Vite**. Para la demo, `npm run build` deja la web compilada en `wwwroot` de `TransitGate.Api` (no se sube al repositorio) y la API la sirve en el mismo puerto (`http://<laptop>:5000`) con `UseStaticFiles()` y `MapFallbackToFile("index.html")`. Así no hay CORS y la cookie de sesión funciona igual en el portal y en el hub.
 
 **En desarrollo:** el servidor de Vite corre en `http://localhost:5173` con proxy hacia la API, para que el navegador vea un solo origen y no haga falta abrir CORS:
 
 ```js
-// web/vite.config.js
+// web/vite.config.ts
+const api = process.env.API_URL ?? "http://localhost:5000"
 server: {
   proxy: {
-    "/api":  { target: "http://localhost:5000" },
-    "/hubs": { target: "http://localhost:5000", ws: true }
+    "/api": api,
+    "/hubs": { target: api, ws: true },
+    "/openapi": api,
+    "/scalar": api
   }
-}
+},
+build: { outDir: "../server/TransitGate.Api/wwwroot", emptyOutDir: true }
 ```
 
 **Reglas para la web:**

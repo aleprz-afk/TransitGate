@@ -22,6 +22,10 @@ builder.Logging.AddSimpleConsole(opciones =>
     opciones.TimestampFormat = "yyyy-MM-ddTHH:mm:ss.fffZ ";
 });
 
+// Los números del JSON van como números (Contrato API): sin esto .NET también acepta "12" y
+// el OpenAPI los publica como number | string, que llega así a los tipos de la web.
+builder.Services.ConfigureHttpJsonOptions(opciones =>
+    opciones.SerializerOptions.NumberHandling = System.Text.Json.Serialization.JsonNumberHandling.Strict);
 builder.Services.AddOpenApi();
 builder.Services.AddSignalR();
 builder.Services.Configure<OpcionesOperacion>(builder.Configuration.GetSection(OpcionesOperacion.Seccion));
@@ -48,6 +52,9 @@ var app = builder.Build();
 
 app.UseMiddleware<MiddlewareTiempos>();
 
+// La web (React) compilada en wwwroot, en el mismo puerto que la API: sin CORS (Contratos de integración, C6).
+app.UseStaticFiles();
+
 app.MapOpenApi();               // /openapi/v1.json
 app.MapScalarApiReference();    // /scalar
 
@@ -56,5 +63,10 @@ app.MapGet("/api/salud", () => Results.Ok(new { estado = "ok", hora = DateTime.U
 
 app.MapDispositivos();
 app.MapHub<EventosHub>(EventosHub.Ruta);
+
+// Cualquier otra ruta es de la web (React Router resuelve la página en el navegador),
+// menos las de la API, que siguen respondiendo 404 en lugar de devolver index.html.
+app.MapFallback("/api/{**resto}", () => Results.NotFound());
+app.MapFallbackToFile("index.html");
 
 app.Run();

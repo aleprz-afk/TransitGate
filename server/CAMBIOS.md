@@ -1,6 +1,6 @@
 # Cambios del servidor: validación y torniquete
 
-Responsable: Alex · Última actualización: 14 de octubre de 2026 · Todo está en `main` hasta el PR #9; en curso: `feat/cruces-y-alertas`. Los contratos están en `docs/`: Contrato de la API v1.2 y Contratos de integración v1.4
+Responsable: Alex · Última actualización: 16 de octubre de 2026 · Todo está en `main` hasta el PR #11; en curso: `feat/web-esqueleto`. Los contratos están en `docs/`: Contrato de la API v1.2 y Contratos de integración v1.5
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -14,6 +14,8 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - El hub de SignalR `/hubs/eventos` envía `EstadoTorniquete` en vivo: estado, conexión del ESP32 y de la visión, y desincronización.
 - Todo vive en memoria hasta que esté la base de datos (PostgreSQL en Docker, ver "Decisiones"): **al reiniciar la API se pierde el estado**.
 - El ESP32 y la visión se identifican con la cabecera `X-Device-Key`. Por ahora en **modo tolerante**: no se rechaza nada, solo queda en el log.
+- La API sirve la web (React) en el mismo puerto: `http://<IP>:5000/`. El proyecto de la web ya está en `web/`, con el proxy de desarrollo, los tipos generados desde el OpenAPI y una página de prueba del panel.
+- Los números del JSON se reciben solo como números: `"pasoIdAbierto": "5"` (entre comillas) responde 400.
 - Hay 80 pruebas automatizadas (dominio y casos de uso), una por criterio de aceptación.
 
 ## Decisiones
@@ -71,7 +73,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
   - Solo abren las tarjetas de la tabla de abajo. Una tarjeta real responde `TarjetaNoRegistrada` hasta que me pases su UID y la agregue.
 - **Latido** `POST /api/torniquetes/tq_1/latido`:
   - Campos obligatorios: `brazoReal` (`"abierto"` o `"cerrado"`), `sirenaReal` y `arranque`. Si falta alguno, responde 400.
-  - Cuando el brazo abre para un paso, manda su id en `pasoIdAbierto` en el siguiente latido; así el servidor sabe que abrió (base de RF-46).
+  - Cuando el brazo abre para un paso, manda su id en `pasoIdAbierto` en el siguiente latido; así el servidor sabe que abrió (base de RF-46). Va como número (`"pasoIdAbierto": 5`), no entre comillas: entre comillas responde 400.
   - Genera un `arranque` nuevo en cada reinicio: el servidor deja registrado cada reinicio en el log.
   - Tras 5 s sin latidos, el torniquete figura **sin conexión**.
   - `brazoReal` y `sirenaReal` deben ser lo que el ESP32 aplicó de verdad: si no coinciden con lo deseado durante más de 2 s, el panel marca el torniquete como **desincronizado** (RF-45 CA4).
@@ -99,6 +101,11 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 
 ### Ana — web (interfaz C6)
 
+- **Proyecto listo en `web/`** (Vite + React + TypeScript). Para empezar: API arriba en el 5000, luego `npm install` y `npm run dev` en `web/`, y abrir `http://localhost:5173`. El proxy de Vite reenvía `/api`, `/hubs`, `/openapi` y `/scalar` a la API, así que no hace falta CORS. Los detalles están en `web/README.md`.
+- **Tipos:** `src/api/esquema.d.ts` se genera con `npm run tipos` (con la API arriba) y está en el repositorio. `src/api/cliente.ts` exporta `api`, un cliente tipado: `api.GET('/api/torniquetes')`, `api.POST('/api/alertas/{id}/apagar-alarma', { params: { path: { id } } })`. Los enteros (`intentoId`, `pasoId`) salen como `number`.
+- **SignalR:** `src/api/eventos.ts` tiene `conectarEventos({ EstadoTorniquete, IntentoRegistrado, AlertaNueva, AlertaActualizada })` y los tipos de cada evento, escritos a mano porque el OpenAPI no describe el hub. Si cambia un evento, te aviso y se cambian ahí.
+- **Página de prueba:** `src/App.tsx` muestra los torniquetes, las alertas abiertas (con el botón de apagar) y los intentos en vivo. Está probada con lecturas, un colado y apagando la alarma; también en 375 px de ancho. Es para reemplazarla por las páginas reales (no hay router todavía: elige tú la librería).
+- **Demo:** `npm run build` deja la web en `server/TransitGate.Api/wwwroot`, que no se sube al repositorio. La API la sirve en `http://<IP>:5000/` y devuelve `index.html` para cualquier ruta que no sea de la API, así funcionan las rutas de React Router al recargar. Si `wwwroot` no existía cuando arrancó la API, hay que reiniciarla.
 - **SignalR:** hub `/hubs/eventos`, evento `EstadoTorniquete`. Son los campos del contrato C6 más dos horas para HU-20, `estadoDesde` y `ultimaSenal`:
 
   ```json
@@ -214,6 +221,12 @@ dotnet run --project TransitGate.Api | Tee-Object -FilePath mediciones.log
 | Modo registro sin ruta todavía; el desafío del celular es fijo | Semanas 4 y Fase 4 |
 
 ## Historial
+
+**16 de octubre (semana 2)**
+- Proyecto de la web en `web/` (Vite + React + TypeScript): proxy hacia la API, tipos generados desde el OpenAPI, conexión a SignalR y una página de prueba del panel.
+- La API sirve la web compilada en `wwwroot` (`UseStaticFiles` y `MapFallbackToFile`); las rutas desconocidas bajo `/api` siguen respondiendo 404.
+- Los números del JSON se reciben solo como números (antes también se aceptaban entre comillas); así el OpenAPI los publica como `number`.
+- Contratos de integración v1.5 (C6).
 
 **14 de octubre (semana 2), segunda parte**
 - Cruces y alertas pasan a casos de uso de Application: cada cruce queda registrado (RF-26 CA1); un colado abre una `AlertaSeguridad` o se suma a la abierta, y deja un `IntentoAcceso` de fraude (RF-28).
