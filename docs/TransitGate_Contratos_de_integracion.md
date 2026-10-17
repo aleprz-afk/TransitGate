@@ -1,6 +1,8 @@
-# TransitGate — Contratos de integración (v1.6)
+# TransitGate — Contratos de integración (v1.7)
 
 El [`TransitGate_Contrato_API.md`](./TransitGate_Contrato_API.md) define las rutas HTTP del servidor. Este documento define todo lo demás que dos integrantes distintos deben construir de forma compatible: el protocolo NFC entre la app y el lector, el stream de la cámara, los pines del hardware, los archivos de configuración, los eventos en tiempo real, el contrato interno entre los dos módulos del servidor y los simuladores. Si un integrante cambia algo de aquí sin avisar, se rompe el trabajo de otro.
+
+**Cambios en v1.7 (16 oct 2026):** C7 — `SoporteResuelto` agrega `ClienteId`, para avisarle al cliente de su paso y su saldo; `INotificador` agrega `SolicitudNuevaAsync` y `EventoViajeAsync`, y `SaldoActualizadoAsync` recibe la causa como enum (`CausaSaldo`). El contenido de los eventos de la sección 6 no cambia.
 
 **Cambios en v1.6 (16 oct 2026):** C6 — evento `RegistroTarjeta` al grupo `operacion` con el resultado de cada lectura en modo registro (RF-10). C7 — Alex pasa a ser dueño del módulo de cuentas, tarjetas y saldo, con Jeisy como revisora; se agrega `ISolicitudesTarjeta` para entregar la tarjeta física en taquilla (RF-09, RF-10, RF-36) y `INotificador.RegistroTarjetaAsync`.
 
@@ -226,7 +228,7 @@ El servidor tiene dos módulos: validación (torniquete, colados) y cuentas (cue
 ```csharp
 public enum EstadoSoporte { Solicitada, Entregada, Activa, Bloqueada }   // Domain/Tarjetas; el virtual usa Activa y Bloqueada
 
-public record SoporteResuelto(Guid SoporteId, Guid TarjetaId, EstadoSoporte Estado);
+public record SoporteResuelto(Guid SoporteId, Guid TarjetaId, Guid ClienteId, EstadoSoporte Estado);
 
 // Si el saldo no alcanza, Exitoso es false y no se descuenta nada (S3).
 public record ResultadoDebito(bool Exitoso, decimal SaldoRestante);
@@ -258,13 +260,14 @@ public interface ISolicitudesTarjeta                 // entrega en taquilla (RF-
 
 public interface INotificador                        // implementa Alex (sobre SignalR)
 {
-    Task SaldoActualizadoAsync(Guid clienteId, decimal saldo, string causa);
     Task EstadoTorniqueteAsync(EstadoTorniqueteVista estado);
     Task IntentoRegistradoAsync(IntentoAcceso intento);
     Task AlertaNuevaAsync(AlertaSeguridad alerta);
     Task AlertaActualizadaAsync(AlertaSeguridad alerta);
     Task RegistroTarjetaAsync(string torniqueteId, Guid solicitudId, ResultadoLigar resultado);
-    // … un método por evento de la sección 6
+    Task SolicitudNuevaAsync(SolicitudPendiente solicitud);
+    Task SaldoActualizadoAsync(Guid clienteId, decimal saldo, CausaSaldo causa);   // Paso, Recarga, Reversion
+    Task EventoViajeAsync(Guid clienteId, IntentoAcceso intento, string torniqueteNombre);
 }
 
 // Contenido del evento EstadoTorniquete (sección 6).
@@ -281,7 +284,7 @@ public interface IUnidadDeTrabajo                    // Infrastructure (sobre el
 
 - `DebitarAsync` no abre su propia transacción: participa en la del caso de uso de validación, que guarda en un solo `IUnidadDeTrabajo.GuardarCambiosAsync` (un `SaveChanges`) el débito, el `IntentoAcceso` y el `PasoAutorizado` (RNF-15). Para eso, `ISaldoService` y los repositorios de Alex comparten el mismo `DbContext`. El débito usa control de concurrencia sobre el saldo (RNF-16).
 - El id del paso se reserva **antes** de debitar, porque `DebitarAsync` lo recibe. Los pasos y los intentos toman su id de una secuencia de PostgreSQL (`UseHiLo` de Npgsql).
-- Los métodos de `INotificador` reciben lo ya calculado (la vista o la entidad), no un id: se llaman con el cerrojo del torniquete tomado o justo después, y con solo el id el notificador tendría que volver a buscarlo; en el caso de `EstadoTorniqueteAsync`, la API se bloquearía. `SaldoActualizadoAsync` sigue con su firma hasta que el módulo de cuentas lo use.
+- Los métodos de `INotificador` reciben lo ya calculado (la vista o la entidad), no un id: se llaman con el cerrojo del torniquete tomado o justo después, y con solo el id el notificador tendría que volver a buscarlo; en el caso de `EstadoTorniqueteAsync`, la API se bloquearía.
 - **Dueños de entidades:** Alex es dueño de todas: `Torniquete`, `PasoAutorizado`, `IntentoAcceso`, `Cruce` y `AlertaSeguridad` (validación) y `Cliente`, `Tarjeta`, `SoporteTarjeta`, `Recarga`, `Tarifa` y `Operador` (cuentas, revisa Jeisy). Las migraciones se fusionan en orden, nunca dos a la vez sobre la misma rama.
 
 ---

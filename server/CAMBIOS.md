@@ -1,6 +1,6 @@
 # Cambios del servidor
 
-Responsable: Alex · Última actualización: 16 de octubre de 2026 · Todo está en `main` hasta el PR #12; en curso: `feat/modo-registro`. Los contratos están en `docs/`: Contrato de la API v1.3 y Contratos de integración v1.6
+Responsable: Alex · Última actualización: 16 de octubre de 2026 · Todo está en `main` hasta el PR #12; en curso: `feat/modo-registro` y, encima de ella, `feat/cuentas-tarjetas-saldo`. Los contratos están en `docs/`: Contrato de la API v1.3 y Contratos de integración v1.7
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -13,11 +13,12 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - Los cruces consumen el paso, detectan colados y activan la alarma.
 - **Entrega en taquilla:** el operador elige una solicitud de tarjeta física y pone el lector en modo registro; la siguiente tarjeta que se acerca queda ligada a esa solicitud, en `Entregada` (RF-09, RF-10, RF-36).
 - El hub de SignalR `/hubs/eventos` envía `EstadoTorniquete` en vivo: estado, conexión del ESP32 y de la visión, y desincronización.
+- **Módulo de cuentas:** clientes, tarjetas, soportes, recargas y débitos ya son entidades reales con sus casos de uso (registro, solicitar la física, confirmar la recepción, recargar, saldo e historiales). Las rutas del cliente llegan con Identity.
 - Todo vive en memoria hasta que esté la base de datos (PostgreSQL en Docker, ver "Decisiones"): **al reiniciar la API se pierde el estado**.
 - El ESP32 y la visión se identifican con la cabecera `X-Device-Key`. Por ahora en **modo tolerante**: no se rechaza nada, solo queda en el log.
 - La API sirve la web (React) en el mismo puerto: `http://<IP>:5000/`. El proyecto de la web ya está en `web/`, con el proxy de desarrollo, los tipos generados desde el OpenAPI y una página de prueba del panel.
 - Los números del JSON se reciben solo como números: `"pasoIdAbierto": "5"` (entre comillas) responde 400.
-- Hay 89 pruebas automatizadas (dominio y casos de uso), una por criterio de aceptación.
+- Hay 137 pruebas automatizadas (dominio y casos de uso), una por criterio de aceptación.
 
 ## Decisiones
 
@@ -162,6 +163,9 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 
     `Ligado` → "Tarjeta entregada" y la solicitud sale de la lista (CA4); `UidYaRegistrado` → "Tarjeta ya registrada", el torniquete sigue esperando otra tarjeta (RF-10 CA2).
   - Hay dos solicitudes de prueba: Luisa Rojas (`1032456789`) y Mateo Díaz (`1121987654`).
+  - Cada solicitud nueva llega en vivo con el evento `SolicitudNueva { solicitudId, cliente: "Luisa R.", fecha }`, para agregarla a la lista sin recargar.
+
+- **Portal del cliente (lo que viene):** los eventos del cliente ya tienen su tipo en `src/api/eventos.ts`: `SaldoActualizado { saldo, causa: "Paso|Recarga|Reversion", fecha }` y `EventoViaje { intentoId, resultado, motivo, torniquete, tarifa, fecha }`. La API ya los envía, pero solo los recibe el dueño de la tarjeta, así que llegan con la sesión (Identity). Las rutas del portal (`/api/clientes`, `/api/tarjetas/mi-tarjeta/...`) también llegan con Identity; mientras tanto puedes maquetar las pantallas con el Contrato §3 a §5 y §9.
 
 - **Más eventos en el grupo `operacion`**, con el contenido del contrato C6:
 
@@ -187,7 +191,14 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 
 - Desde el 16 de octubre el módulo de cuentas, la base de datos e Identity los construyo yo (ver "Decisiones"). Te pido que revises esos PR: eres revisora de C7, y si ya tenías algo avanzado sin subir, avísame para no repetirlo.
 - Lo que cambió en C7 (contratos de integración v1.6): nueva interfaz `ISolicitudesTarjeta` en `Application/Cuentas/` para la entrega en taquilla (`PendientePorIdAsync`, `PendientesAsync`, `LigarUidAsync`). Una solicitud es el `SoporteTarjeta` físico en `Solicitada`; su id es el del soporte.
-- Por ahora `CuentasDePrueba` (en memoria, en `TransitGate.Api/Esqueleto/`) implementa todo C7. En el siguiente PR la reemplazan el dominio real (`Cliente`, `Tarjeta`, `SoporteTarjeta`, `Recarga`) y sus casos de uso.
+- **Segundo PR (`feat/cuentas-tarjetas-saldo`), para revisar:**
+  - Dominio en `Domain/Clientes/` y `Domain/Tarjetas/`: `Cliente`, `Tarjeta` (saldo; `Debitar` no deja saldo negativo, S3), `SoporteTarjeta` (Solicitada → Entregada → Activa, o Bloqueada con `MotivoBloqueo`), `Recarga` y `DebitoPaso` (para revertir un paso una sola vez, RF-46).
+  - `ServicioCuentas` (en `Application/Cuentas/`) implementa C7 (`ISoporteResolver`, `ISaldoService`, `ISolicitudesTarjeta`) sobre los repositorios. Reemplaza a `CuentasDePrueba`, que ya no existe.
+  - Casos de uso: `RegistrarCliente` (RF-01, RF-07), `SolicitarTarjetaFisica` (RF-08), `ConfirmarRecepcion` (RF-11), `ConsultarMiTarjeta` (RF-16), `Recargar` (RF-15), `ConsultarRecargas` (RF-17) y `ConsultarViajes` (RF-39).
+  - La cuenta de acceso (correo y contraseña) queda detrás de `ICuentasAcceso`, que implementa Identity en el tercer PR. La contraseña nunca llega al dominio (RNF-17).
+  - C7 v1.7: `SoporteResuelto` lleva `ClienteId`, para avisarle al cliente de su paso y su saldo.
+  - Los cambios de saldo de una tarjeta se serializan con `CerrojoTarjetas` (RNF-16); hay una prueba de 20 recargas en paralelo.
+  - La tarifa y los montos de recarga pasaron a la sección `Cuentas` de `appsettings.json`.
 - Decisiones de C7 que siguen vigentes: `EstadoSoporte` y `TipoSoporte` están en `Domain/Tarjetas/`; `ResultadoDebito` es `(bool Exitoso, decimal SaldoRestante)` y si el saldo no alcanza no se descuenta nada (S3); el dinero es `decimal` adentro y entero en el JSON; el id del paso se reserva antes de debitar; el débito, el paso y el intento se guardan con un solo `IUnidadDeTrabajo.GuardarCambiosAsync` (RNF-15).
 - Para la app (C5) no cambia nada todavía: las rutas `/api/auth/*` y `/api/tarjetas/mi-tarjeta/soporte-virtual` llegan con Identity.
 
@@ -244,13 +255,19 @@ dotnet run --project TransitGate.Api | Tee-Object -FilePath mediciones.log
 | Las rutas del panel y de la taquilla no piden sesión | Con Identity (tercer PR del módulo de cuentas) |
 | La transacción del paso (RNF-15) está definida pero en memoria no se deshace nada si algo falla a la mitad | Cuando esté la base de datos; ahí se agrega la prueba con fallo forzado |
 | No se revierte el débito si el brazo no abre (RF-46) | Semana 6 |
-| SignalR todavía no envía los eventos del cliente (`SaldoActualizado`, `EventoViaje`) ni `SolicitudNueva` | `SolicitudNueva` y `SaldoActualizado` con el segundo PR del módulo de cuentas; `EventoViaje` con Identity |
+| `SaldoActualizado` y `EventoViaje` se envían, pero nadie entra todavía al grupo del cliente | Con Identity |
 | Quién apagó la alarma no queda registrado (HU-22 CA1 pide "con mi nombre") | Con Identity |
 | El desafío del celular es fijo | Fase 4 |
-| Una tarjeta entregada en taquilla no se puede activar todavía: responde `SoporteNoActivo` hasta que exista "confirmar recepción" (RF-11) | Siguiente PR (cuentas, tarjetas y saldo) |
-| Las solicitudes de tarjeta son datos de prueba fijos; todavía no se pueden crear desde el portal (RF-08) | Siguiente PR (cuentas, tarjetas y saldo) |
+| Registro, solicitar la física, confirmar la recepción, recargar e historiales existen como casos de uso, pero sin ruta: una tarjeta entregada en taquilla responde `SoporteNoActivo` hasta poder confirmarla | Con Identity (tercer PR del módulo de cuentas) |
+| La recarga no tiene todavía `Idempotency-Key` ni `simularRechazo` en el contrato | Con las rutas del cliente (tercer PR) |
 
 ## Historial
+
+**16 de octubre (semana 2), tercera parte**
+- Módulo de cuentas real (en memoria): `Cliente`, `Tarjeta`, `SoporteTarjeta`, `Recarga` y `DebitoPaso`, con `ServicioCuentas` implementando C7. Reemplaza a `CuentasDePrueba`; los datos de prueba ahora son clientes de verdad.
+- Casos de uso de registro, tarjeta física, recarga, saldo e historiales, con sus pruebas (RF-01, RF-07, RF-08, RF-11, RF-15, RF-16, RF-17, RF-39).
+- Eventos `SolicitudNueva` (taquilla), `SaldoActualizado` y `EventoViaje` (cliente).
+- Contratos de integración v1.7 (C7).
 
 **16 de octubre (semana 2), segunda parte**
 - Entrega de tarjetas en taquilla: `GET /api/tarjetas/solicitudes` (RF-36) y `POST /api/torniquetes/{id}/modo-registro` (RF-09). La lectura en modo registro liga el UID a la solicitud y la deja `Entregada` (RF-10); un UID ya registrado no se liga y el torniquete sigue esperando otra tarjeta.

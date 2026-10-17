@@ -36,7 +36,7 @@ Mientras no hay base de datos, todo vive en memoria (`TransitGate.Api/Esqueleto`
 | `POST /api/torniquetes/{id}/modo-registro` | Pone el lector en modo registro para entregar la tarjeta de una solicitud (sin sesión todavía) |
 | Cualquier otra ruta | La web compilada en `wwwroot` (`index.html`); una ruta desconocida bajo `/api` responde 404 |
 
-Tarjetas de prueba (sección `DatosDePrueba` de `appsettings.json`, tarifa 3.200):
+Tarjetas de prueba (sección `DatosDePrueba` de `appsettings.json`; cada una se carga como un cliente con su tarjeta física). La tarifa (3.200) y los montos de recarga están en la sección `Cuentas`:
 
 | UID | Estado | Saldo | Respuesta |
 | --- | --- | --- | --- |
