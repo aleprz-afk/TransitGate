@@ -37,11 +37,20 @@ export interface AlertaActualizadaEvento {
   estado: EstadoAlerta
 }
 
+/** Resultado de una lectura en modo registro (RF-10): "Tarjeta entregada" o "Tarjeta ya registrada". */
+export interface RegistroTarjetaEvento {
+  torniqueteId: string
+  solicitudId: string
+  resultado: 'Ligado' | 'UidYaRegistrado' | 'SolicitudNoPendiente'
+  fecha: string
+}
+
 export interface ManejadoresEventos {
   EstadoTorniquete?: (e: EstadoTorniqueteEvento) => void
   IntentoRegistrado?: (e: IntentoRegistradoEvento) => void
   AlertaNueva?: (e: AlertaNuevaEvento) => void
   AlertaActualizada?: (e: AlertaActualizadaEvento) => void
+  RegistroTarjeta?: (e: RegistroTarjetaEvento) => void
 }
 
 /** Abre la conexión al hub y registra los manejadores. Devuelve la conexión para cerrarla con stop(). */

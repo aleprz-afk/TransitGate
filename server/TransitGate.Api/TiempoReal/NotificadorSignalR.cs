@@ -1,17 +1,19 @@
 using Microsoft.AspNetCore.SignalR;
 using TransitGate.Api.Contratos;
+using TransitGate.Application.Cuentas;
 using TransitGate.Application.Notificaciones;
 using TransitGate.Domain.Accesos;
 using TransitGate.Domain.Alertas;
 
 namespace TransitGate.Api.TiempoReal;
 
-public sealed class NotificadorSignalR(IHubContext<EventosHub> hub) : INotificador
+public sealed class NotificadorSignalR(IHubContext<EventosHub> hub, TimeProvider reloj) : INotificador
 {
     public const string EventoEstadoTorniquete = "EstadoTorniquete";
     public const string EventoIntentoRegistrado = "IntentoRegistrado";
     public const string EventoAlertaNueva = "AlertaNueva";
     public const string EventoAlertaActualizada = "AlertaActualizada";
+    public const string EventoRegistroTarjeta = "RegistroTarjeta";
 
     public Task EstadoTorniqueteAsync(EstadoTorniqueteVista estado, CancellationToken ct = default) =>
         AOperacion(EventoEstadoTorniquete, EstadoTorniqueteEvento.Desde(estado), ct);
@@ -24,6 +26,12 @@ public sealed class NotificadorSignalR(IHubContext<EventosHub> hub) : INotificad
 
     public Task AlertaActualizadaAsync(AlertaSeguridad alerta, CancellationToken ct = default) =>
         AOperacion(EventoAlertaActualizada, AlertaActualizadaEvento.Desde(alerta), ct);
+
+    public Task RegistroTarjetaAsync(string torniqueteId, Guid solicitudId, ResultadoLigar resultado, CancellationToken ct = default) =>
+        AOperacion(
+            EventoRegistroTarjeta,
+            new RegistroTarjetaEvento(torniqueteId, IdsPublicos.Solicitud(solicitudId), resultado.ToString(), reloj.GetUtcNow().UtcDateTime),
+            ct);
 
     private Task AOperacion(string evento, object contenido, CancellationToken ct) =>
         hub.Clients.Group(EventosHub.GrupoOperacion).SendAsync(evento, contenido, ct);

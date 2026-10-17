@@ -17,4 +17,7 @@ public interface IParametrosOperacion
 
     /// <summary>S14: sin señal de la visión durante este plazo, figura fuera de línea (RF-30).</summary>
     TimeSpan PlazoSenalVision { get; }
+
+    /// <summary>S6: duración máxima del modo registro.</summary>
+    TimeSpan DuracionModoRegistro { get; }
 }

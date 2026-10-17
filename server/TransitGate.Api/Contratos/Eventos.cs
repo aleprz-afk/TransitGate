@@ -47,3 +47,6 @@ public record AlertaActualizadaEvento(string AlertaId, string Estado)
     public static AlertaActualizadaEvento Desde(AlertaSeguridad alerta) => new(
         IdsPublicos.Alerta(alerta.Id), alerta.Estado.ToString());
 }
+
+/// <summary>resultado: Ligado, UidYaRegistrado o SolicitudNoPendiente. Sin el UID (RNF-27).</summary>
+public record RegistroTarjetaEvento(string TorniqueteId, string SolicitudId, string Resultado, DateTime Fecha);

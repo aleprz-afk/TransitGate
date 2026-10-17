@@ -60,7 +60,7 @@ public static partial class DispositivosEndpoints
         if (resultado is null)
             return TorniqueteNoRegistrado(id);
 
-        return TypedResults.Ok(RespuestaLectura.Desde(resultado));
+        return TypedResults.Ok(RespuestaLectura.Desde(resultado, lectura.LecturaId));
     }
 
     private static async Task<Results<Ok<RespuestaLatido>, BadRequest<ErrorApi>, NotFound<ErrorApi>>> Latido(

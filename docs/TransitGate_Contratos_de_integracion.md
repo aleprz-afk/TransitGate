@@ -1,6 +1,8 @@
-# TransitGate — Contratos de integración (v1.5)
+# TransitGate — Contratos de integración (v1.6)
 
 El [`TransitGate_Contrato_API.md`](./TransitGate_Contrato_API.md) define las rutas HTTP del servidor. Este documento define todo lo demás que dos integrantes distintos deben construir de forma compatible: el protocolo NFC entre la app y el lector, el stream de la cámara, los pines del hardware, los archivos de configuración, los eventos en tiempo real, el contrato interno entre los dos módulos del servidor y los simuladores. Si un integrante cambia algo de aquí sin avisar, se rompe el trabajo de otro.
+
+**Cambios en v1.6 (16 oct 2026):** C6 — evento `RegistroTarjeta` al grupo `operacion` con el resultado de cada lectura en modo registro (RF-10). C7 — Alex pasa a ser dueño del módulo de cuentas, tarjetas y saldo, con Jeisy como revisora; se agrega `ISolicitudesTarjeta` para entregar la tarjeta física en taquilla (RF-09, RF-10, RF-36) y `INotificador.RegistroTarjetaAsync`.
 
 **Cambios en v1.5 (16 oct 2026):** C6 — `npm run build` deja la web directamente en `wwwroot` de `TransitGate.Api` (ya no hay que copiarla); el proxy de Vite también reenvía `/openapi` y `/scalar`, y la dirección de la API se puede cambiar con `API_URL`. Las rutas de la API que no existen siguen respondiendo 404 y no `index.html`.
 
@@ -20,9 +22,9 @@ El [`TransitGate_Contrato_API.md`](./TransitGate_Contrato_API.md) define las rut
 | C2 | App Android ↔ ESP32 | App (Jeisy) | Firmware (Karol) | APDU ISO 7816-4 por NFC | Lector USB o PN532 + app de prueba |
 | C3 | ESP32-CAM → Visión | Cámara (Wili) | Visión (Wili) | MJPEG por HTTP | Navegador y OpenCV |
 | C4 | Visión ↔ API | Visión (Wili) | Backend validación (Alex) | HTTP/JSON, Contrato API §7 | `sim-vision` y API esqueleto |
-| C5 | App Android ↔ API | App (Jeisy) | Backend cuentas (Jeisy) | HTTP/JSON, Contrato API §2 y §4 | Scalar |
-| C6 | Web ↔ API | Web (Ana) | Backend (Alex, Jeisy) | HTTP/JSON + SignalR | Scalar y datos semilla |
-| C7 | Módulo de validación ↔ módulo de cuentas | Backend validación (Alex) | Backend cuentas (Jeisy) | Interfaces C# | Pruebas unitarias |
+| C5 | App Android ↔ API | App (Jeisy) | Backend cuentas (Alex) | HTTP/JSON, Contrato API §2 y §4 | Scalar |
+| C6 | Web ↔ API | Web (Ana) | Backend (Alex) | HTTP/JSON + SignalR | Scalar y datos semilla |
+| C7 | Módulo de validación ↔ módulo de cuentas | Backend validación (Alex) | Backend cuentas (Alex; revisa Jeisy) | Interfaces C# | Pruebas unitarias |
 | C8 | ESP32 ↔ PN532, servo y sirena | Firmware (Karol) | Hardware (Karol) | Pines e I2C | Banco de pruebas |
 
 Los dueños son los integrantes del equipo según el plan de trabajo (v2.1). Los códigos C1–C8 identifican cada interfaz.
@@ -208,6 +210,8 @@ IntentoRegistrado { "intentoId": 77, "torniqueteId": "tq_1", "resultado": "Recha
                     "motivo": "SaldoInsuficiente", "fecha": "…" }
 AlertaNueva       { "alertaId": "al_9", "torniqueteId": "tq_1", "tipo": "FraudeSinValidacion", "fecha": "…" }
 AlertaActualizada { "alertaId": "al_9", "estado": "Atendida|Resuelta" }
+RegistroTarjeta   { "torniqueteId": "tq_1", "solicitudId": "s_44…", "fecha": "…",
+                    "resultado": "Ligado|UidYaRegistrado|SolicitudNoPendiente" }   // lectura en modo registro (RF-10)
 SolicitudNueva    { "solicitudId": "s_44", "cliente": "Luisa R.", "fecha": "…" }
 ```
 
@@ -217,7 +221,7 @@ El panel nunca muestra el documento completo ni el UID completo del cliente (RNF
 
 ## 7. C7 — Contrato interno del servidor
 
-El servidor lo construyen dos personas: Alex (validación, torniquete, colados) y Jeisy (cuentas, tarjetas, saldo). Para que trabajen en paralelo, el módulo de validación solo usa estas interfaces de `TransitGate.Application`; Jeisy las implementa y Alex las consume. Mientras no existan, Alex usa implementaciones falsas en memoria.
+El servidor tiene dos módulos: validación (torniquete, colados) y cuentas (cuentas, tarjetas, saldo). Desde la v1.6 los dos los construye Alex, con Jeisy como revisora de cuentas; la separación se mantiene: el módulo de validación solo usa estas interfaces de `TransitGate.Application` para hablar con el de cuentas. Mientras no existan las implementaciones reales, la API usa implementaciones falsas en memoria.
 
 ```csharp
 public enum EstadoSoporte { Solicitada, Entregada, Activa, Bloqueada }   // Domain/Tarjetas; el virtual usa Activa y Bloqueada
@@ -227,7 +231,7 @@ public record SoporteResuelto(Guid SoporteId, Guid TarjetaId, EstadoSoporte Esta
 // Si el saldo no alcanza, Exitoso es false y no se descuenta nada (S3).
 public record ResultadoDebito(bool Exitoso, decimal SaldoRestante);
 
-public interface ISoporteResolver                    // implementa Jeisy
+public interface ISoporteResolver                    // módulo de cuentas
 {
     Task<SoporteResuelto?> PorUidAsync(string uidHex);
     Task<SoporteResuelto?> PorSoporteIdAsync(Guid soporteId);
@@ -235,11 +239,21 @@ public interface ISoporteResolver                    // implementa Jeisy
                                    byte[] desafio, byte[] firma);   // Fase 4
 }
 
-public interface ISaldoService                       // implementa Jeisy
+public interface ISaldoService                       // módulo de cuentas
 {
     Task<decimal> TarifaVigenteAsync();
     Task<ResultadoDebito> DebitarAsync(Guid tarjetaId, decimal monto, long pasoId);
     Task RevertirAsync(long pasoId);                 // RF-46
+}
+
+public record SolicitudPendiente(Guid SoporteId, Guid ClienteId, string NombreCompleto, string Documento, DateTime Fecha);
+public enum ResultadoLigar { Ligado, UidYaRegistrado, SolicitudNoPendiente }
+
+public interface ISolicitudesTarjeta                 // entrega en taquilla (RF-09, RF-10, RF-36)
+{
+    Task<SolicitudPendiente?> PendientePorIdAsync(Guid soporteId);
+    Task<IReadOnlyList<SolicitudPendiente>> PendientesAsync(string? documento);   // la más antigua primero
+    Task<ResultadoLigar> LigarUidAsync(Guid soporteId, string uidHex);            // Solicitada → Entregada
 }
 
 public interface INotificador                        // implementa Alex (sobre SignalR)
@@ -249,6 +263,7 @@ public interface INotificador                        // implementa Alex (sobre S
     Task IntentoRegistradoAsync(IntentoAcceso intento);
     Task AlertaNuevaAsync(AlertaSeguridad alerta);
     Task AlertaActualizadaAsync(AlertaSeguridad alerta);
+    Task RegistroTarjetaAsync(string torniqueteId, Guid solicitudId, ResultadoLigar resultado);
     // … un método por evento de la sección 6
 }
 
@@ -256,7 +271,7 @@ public interface INotificador                        // implementa Alex (sobre S
 public record EstadoTorniqueteVista(string TorniqueteId, EstadoTorniquete Estado, DateTime? EstadoDesde,
     bool Esp32Conectado, DateTime? UltimaSenal, bool VisionConectada, bool Desincronizado);
 
-public interface IUnidadDeTrabajo                    // implementa Jeisy (sobre el DbContext)
+public interface IUnidadDeTrabajo                    // Infrastructure (sobre el DbContext)
 {
     Task GuardarCambiosAsync(CancellationToken ct = default);
 }
@@ -266,8 +281,8 @@ public interface IUnidadDeTrabajo                    // implementa Jeisy (sobre 
 
 - `DebitarAsync` no abre su propia transacción: participa en la del caso de uso de validación, que guarda en un solo `IUnidadDeTrabajo.GuardarCambiosAsync` (un `SaveChanges`) el débito, el `IntentoAcceso` y el `PasoAutorizado` (RNF-15). Para eso, `ISaldoService` y los repositorios de Alex comparten el mismo `DbContext`. El débito usa control de concurrencia sobre el saldo (RNF-16).
 - El id del paso se reserva **antes** de debitar, porque `DebitarAsync` lo recibe. Los pasos y los intentos toman su id de una secuencia de PostgreSQL (`UseHiLo` de Npgsql).
-- Los métodos de `INotificador` reciben lo ya calculado (la vista o la entidad), no un id: se llaman con el cerrojo del torniquete tomado o justo después, y con solo el id el notificador tendría que volver a buscarlo; en el caso de `EstadoTorniqueteAsync`, la API se bloquearía. `SaldoActualizadoAsync` sigue con su firma hasta que Jeisy lo use.
-- **Dueños de entidades:** Alex es dueño de `Torniquete`, `PasoAutorizado`, `IntentoAcceso`, `Cruce` y `AlertaSeguridad`; Jeisy de `Cliente`, `Tarjeta`, `SoporteTarjeta`, `Recarga`, `Tarifa` y `Operador`. Cada uno escribe las migraciones de sus entidades; las migraciones se fusionan en orden, nunca dos a la vez sobre la misma rama.
+- Los métodos de `INotificador` reciben lo ya calculado (la vista o la entidad), no un id: se llaman con el cerrojo del torniquete tomado o justo después, y con solo el id el notificador tendría que volver a buscarlo; en el caso de `EstadoTorniqueteAsync`, la API se bloquearía. `SaldoActualizadoAsync` sigue con su firma hasta que el módulo de cuentas lo use.
+- **Dueños de entidades:** Alex es dueño de todas: `Torniquete`, `PasoAutorizado`, `IntentoAcceso`, `Cruce` y `AlertaSeguridad` (validación) y `Cliente`, `Tarjeta`, `SoporteTarjeta`, `Recarga`, `Tarifa` y `Operador` (cuentas, revisa Jeisy). Las migraciones se fusionan en orden, nunca dos a la vez sobre la misma rama.
 
 ---
 

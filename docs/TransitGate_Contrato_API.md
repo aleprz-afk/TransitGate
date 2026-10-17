@@ -1,8 +1,14 @@
-# TransitGate — Contrato de la API (v1.2)
+# TransitGate — Contrato de la API (v1.3)
 
 Rutas y formato JSON entre el ESP32 principal, el servicio de visión, la web/app y el servidor. Completa el pendiente de [`TransitGate_Arquitectura_del_sistema_v2.md`](./TransitGate_Arquitectura_del_sistema_v2.md) sección 9. Cubre los 46 RF de `Requisitos funcionales (v2)` y usa sus supuestos (S1–S15).
 
 El detalle de las interfaces que no son HTTP (APDU entre la app y el lector, stream de la cámara, pines, `config.json` y simuladores) está en [`TransitGate_Contratos_de_integracion.md`](./TransitGate_Contratos_de_integracion.md).
+
+**Cambios en v1.3 (16 oct 2026)** (modo registro y taquilla):
+- `POST /api/torniquetes/{id}/modo-registro` responde 400 `SolicitudIdInvalido` y 404 `SolicitudNoEncontrada` o `TorniqueteNoRegistrado`; el 409 `TorniqueteOcupado` también aplica en `Alarma` y si ya está en modo registro (sección 4).
+- Una lectura con `UidYaRegistrado` deja el torniquete en `ModoRegistro` para probar con otra tarjeta (RF-10 CA2); se agrega `SolicitudNoPendiente`. Ninguna lectura en modo registro deja `IntentoAcceso` (sección 4).
+- `GET /api/tarjetas/solicitudes` agrega `documento` (enmascarado salvo al buscar) y el filtro `?documento=` (sección 8, RF-36).
+- Los números del JSON van como números: `"pasoIdAbierto": "5"` responde 400 (sección 1).
 
 **Cambios en v1.2 (14 oct 2026)** (alineación con lo construido en las semanas 1 y 2):
 - Se definen los errores de las rutas de los dispositivos: 400 por datos mal formados (con su código), 401 `CredencialInvalida` y 404 `TorniqueteNoRegistrado` (secciones 1, 6 y 7).
@@ -19,6 +25,7 @@ El detalle de las interfaces que no son HTTP (APDU entre la app y el lector, str
 
 - **Transporte:** todo por HTTP, dentro de la red local de la demo o de desarrollo (sin HTTPS, sin túnel — ver arquitectura v2, sección 9).
 - **Formato:** `Content-Type: application/json` en cuerpo y respuesta, salvo el stream MJPEG de la cámara.
+- **Números:** van como números JSON, nunca entre comillas; un número entre comillas recibe 400.
 - **Fechas:** UTC en formato ISO-8601 (`2026-09-27T20:30:00Z`); el cliente las muestra en hora de Colombia (RNF-42).
 - **Errores de validación (400):**
   ```json
@@ -123,15 +130,21 @@ Entrega y vinculación en taquilla (RF-09, RF-10; el torniquete pasa al estado `
 POST /api/torniquetes/{torniqueteId}/modo-registro          Actor: Operador
 { "solicitudId": "s_44..." }
 → 200 { "expiraEn": 60 }
-→ 409 { "error": "TorniqueteOcupado", "mensaje": "El torniquete no está disponible para modo registro." }
+→ 400 { "error": "SolicitudIdInvalido", "mensaje": "…" }
+→ 404 { "error": "SolicitudNoEncontrada", "mensaje": "La solicitud no existe o ya se entregó." }
+→ 404 { "error": "TorniqueteNoRegistrado", "mensaje": "…" }
+→ 409 { "error": "TorniqueteOcupado", "mensaje": "El torniquete no está disponible para modo registro." }   (no está en Cerrado, RF-09 CA4)
 ```
 
-Mientras el torniquete está en `ModoRegistro`, la siguiente lectura que llega por `POST /api/torniquetes/{id}/lecturas` (sección 6) no se valida como un paso: se liga ese UID a la solicitud, la tarjeta pasa a `Entregada`, el torniquete vuelve a `Cerrado` y la respuesta al ESP32 es:
+Mientras el torniquete está en `ModoRegistro`, la siguiente lectura que llega por `POST /api/torniquetes/{id}/lecturas` (sección 6) no se valida como un paso: no se cobra, no se abre el brazo y no queda `IntentoAcceso` (RF-09 CA2, RF-23 CA3). La respuesta al ESP32 es:
 
 ```
-→ 200 { "accion": "registrada", "lecturaId": "a1f3-0007" }       (el brazo no se mueve)
-→ 200 { "accion": "denegar", "motivo": "UidYaRegistrado" }         (el UID ya pertenece a otro soporte)
+→ 200 { "accion": "registrada", "lecturaId": "a1f3-0007" }       (UID ligado: la tarjeta pasa a Entregada y el torniquete vuelve a Cerrado)
+→ 200 { "accion": "denegar", "motivo": "UidYaRegistrado" }         (el UID ya pertenece a otro soporte; el torniquete sigue en ModoRegistro, RF-10 CA2)
+→ 200 { "accion": "denegar", "motivo": "SolicitudNoPendiente" }    (la solicitud ya se entregó; el torniquete vuelve a Cerrado)
 ```
+
+Un reintento con el mismo `lecturaId` recibe la misma respuesta (RF-18 CA4). Si pasan 60 s sin lectura, el torniquete vuelve a `Cerrado` y la solicitud sigue pendiente (RF-09 CA3). El panel recibe el resultado en el evento `RegistroTarjeta` (contratos de integración, C6).
 
 ```
 POST /api/tarjetas/mi-tarjeta/confirmar-recepcion            (RF-11, S5: Entregada → Activa)
@@ -325,9 +338,11 @@ PATCH /api/alertas/{id}
 ```
 
 ```
-GET /api/tarjetas/solicitudes?estado=Solicitada
-→ 200 [ { "solicitudId", "clienteId", "nombreCompleto", "fecha" }, … ]                         (RF-36)
+GET /api/tarjetas/solicitudes?estado=Solicitada&documento=1032456789
+→ 200 [ { "solicitudId", "clienteId", "nombreCompleto", "documento": "••••••6789", "fecha" }, … ]   (RF-36)
 ```
+
+La más antigua primero (CA1). `documento` va con los 4 últimos dígitos, salvo cuando se busca por `?documento=`, que la devuelve completa (RNF-27). Por ahora `estado` solo acepta `Solicitada`; otro valor recibe 400 `EstadoInvalido`.
 
 ```
 GET /api/torniquetes/{id}/video                                                                (RF-38, Could)

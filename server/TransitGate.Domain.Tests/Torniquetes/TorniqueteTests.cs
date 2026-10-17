@@ -212,8 +212,10 @@ public class TorniqueteTests
     {
         var torniquete = NuevoTorniquete();
 
-        torniquete.ActivarModoRegistro(T0, TimeSpan.FromSeconds(60));
+        var solicitud = Guid.NewGuid();
+        torniquete.ActivarModoRegistro(T0, TimeSpan.FromSeconds(60), solicitud);
         Assert.Equal(EstadoTorniquete.ModoRegistro, torniquete.Estado);
+        Assert.Equal(solicitud, torniquete.SolicitudEnRegistro);
         Assert.Equal(MotivoIntento.TorniqueteOcupado, torniquete.MotivoNoDisponible);
 
         torniquete.ActualizarPorTiempo(Seg(59));
@@ -222,13 +224,14 @@ public class TorniqueteTests
         torniquete.ActualizarPorTiempo(Seg(60));
         Assert.Equal(EstadoTorniquete.Cerrado, torniquete.Estado);
         Assert.Null(torniquete.ModoRegistroHasta);
+        Assert.Null(torniquete.SolicitudEnRegistro);
     }
 
     [Fact] // RF-10
     public void Ligar_la_tarjeta_termina_el_modo_registro()
     {
         var torniquete = NuevoTorniquete();
-        torniquete.ActivarModoRegistro(T0, TimeSpan.FromSeconds(60));
+        torniquete.ActivarModoRegistro(T0, TimeSpan.FromSeconds(60), Guid.NewGuid());
 
         torniquete.TerminarModoRegistro(Seg(20));
 
@@ -240,14 +243,14 @@ public class TorniqueteTests
     {
         var torniquete = ConPasoAutorizado(out _);
 
-        Assert.Throws<InvalidOperationException>(() => torniquete.ActivarModoRegistro(Seg(1), TimeSpan.FromSeconds(60)));
+        Assert.Throws<InvalidOperationException>(() => torniquete.ActivarModoRegistro(Seg(1), TimeSpan.FromSeconds(60), Guid.NewGuid()));
     }
 
     [Fact] // RF-28 CA5
     public void Un_cruce_en_modo_registro_es_fraude_y_cancela_el_modo()
     {
         var torniquete = NuevoTorniquete();
-        torniquete.ActivarModoRegistro(T0, TimeSpan.FromSeconds(60));
+        torniquete.ActivarModoRegistro(T0, TimeSpan.FromSeconds(60), Guid.NewGuid());
 
         var resultado = torniquete.RegistrarCruce(SentidoCruce.Entrada, Seg(5), Seg(5));
 
@@ -356,7 +359,7 @@ public class TorniqueteTests
         var torniquete = NuevoTorniquete();
         Assert.Null(torniquete.EstadoDesde);
 
-        torniquete.ActivarModoRegistro(T0, TimeSpan.FromSeconds(60));
+        torniquete.ActivarModoRegistro(T0, TimeSpan.FromSeconds(60), Guid.NewGuid());
         Assert.Equal(T0, torniquete.EstadoDesde);
 
         torniquete.RegistrarCruce(SentidoCruce.Entrada, Seg(5), Seg(5));      // fraude: Alarma
@@ -371,7 +374,7 @@ public class TorniqueteTests
     {
         var torniquete = NuevoTorniquete();
 
-        torniquete.ActivarModoRegistro(T0, TimeSpan.FromSeconds(60));
+        torniquete.ActivarModoRegistro(T0, TimeSpan.FromSeconds(60), Guid.NewGuid());
 
         Assert.Null(torniquete.DeseadoDesde);
     }
