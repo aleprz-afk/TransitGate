@@ -36,6 +36,16 @@ public sealed class IntentoRepositorioEnMemoria : IIntentoRepositorio
             return Task.FromResult(recientes);
         }
     }
+
+    public Task<IReadOnlyList<IntentoAcceso>> ListarPorTarjetaAsync(Guid tarjetaId, int limite, CancellationToken ct = default)
+    {
+        lock (_cerrojo)
+        {
+            IReadOnlyList<IntentoAcceso> recientes =
+                [.. _intentos.Where(i => i.TarjetaId == tarjetaId).OrderByDescending(i => i.Id).Take(limite)];
+            return Task.FromResult(recientes);
+        }
+    }
 }
 
 /// <summary>En memoria cada repositorio guarda al instante; con EF Core aquí va el único SaveChanges (RNF-15).</summary>

@@ -1,3 +1,4 @@
+using TransitGate.Application.Notificaciones;
 using TransitGate.Application.Taquilla;
 using TransitGate.Application.Torniquetes;
 using TransitGate.Application.Validacion;
@@ -54,6 +55,23 @@ public class ValidarLecturaTests
         Assert.Equal(EstadoTorniquete.EsperandoCruce, _torniquete.Estado);
         Assert.Equal(resultado.PasoId, _torniquete.PasoPendiente!.Id);
         Assert.Equal((soporte.TarjetaId, 3200m, resultado.PasoId!.Value), Assert.Single(_cuentas.Debitos));
+    }
+
+    [Fact] // RF-16 CA2, RF-39 CA4
+    public async Task Al_cliente_le_llegan_el_viaje_y_el_saldo_nuevo_y_un_rechazo_solo_como_viaje()
+    {
+        var conSaldo = _cuentas.Agregar("04A1B2C3", saldo: 5000);
+        var sinSaldo = _cuentas.Agregar("DEADBEEF", saldo: 100);
+
+        await Leer("04A1B2C3", "a1f3-0001");
+        _torniquete.RegistrarCruce(SentidoCruce.Entrada, Ahora, Ahora);   // la persona cruza y el torniquete queda libre
+        await Leer("DEADBEEF", "a1f3-0002");
+
+        Assert.Equal((conSaldo.ClienteId, 1800m, CausaSaldo.Paso), Assert.Single(_notificador.Saldos));
+        Assert.Equal(
+            [(conSaldo.ClienteId, ResultadoIntento.Exitoso), (sinSaldo.ClienteId, ResultadoIntento.Rechazado)],
+            _notificador.Viajes.Select(v => (v.ClienteId, v.Intento.Resultado)));
+        Assert.All(_notificador.Viajes, v => Assert.Equal("Torniquete 1", v.Torniquete));
     }
 
     [Fact] // RF-20 CA3

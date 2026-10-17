@@ -24,7 +24,7 @@ internal sealed class CuentasFalsas : ISoporteResolver, ISaldoService
 
     public SoporteResuelto Agregar(string uid, decimal saldo, EstadoSoporte estado = EstadoSoporte.Activa)
     {
-        var soporte = new SoporteResuelto(Guid.NewGuid(), Guid.NewGuid(), estado);
+        var soporte = new SoporteResuelto(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid(), estado);
         _soportes[uid] = soporte;
         _saldos[soporte.TarjetaId] = saldo;
         return soporte;
@@ -89,6 +89,10 @@ internal sealed class IntentosFalsos : IIntentoRepositorio
     public Task<IReadOnlyList<IntentoAcceso>> ListarPorTorniqueteAsync(string torniqueteId, int limite, CancellationToken ct = default) =>
         Task.FromResult<IReadOnlyList<IntentoAcceso>>(
             [.. Guardados.Where(i => i.TorniqueteId == torniqueteId).OrderByDescending(i => i.Id).Take(limite)]);
+
+    public Task<IReadOnlyList<IntentoAcceso>> ListarPorTarjetaAsync(Guid tarjetaId, int limite, CancellationToken ct = default) =>
+        Task.FromResult<IReadOnlyList<IntentoAcceso>>(
+            [.. Guardados.Where(i => i.TarjetaId == tarjetaId).OrderByDescending(i => i.Id).Take(limite)]);
 }
 
 internal sealed class UnidadDeTrabajoFalsa : IUnidadDeTrabajo
@@ -154,6 +158,30 @@ internal sealed class NotificadorFalso : INotificador
     public Task RegistroTarjetaAsync(string torniqueteId, Guid solicitudId, ResultadoLigar resultado, CancellationToken ct = default)
     {
         Registros.Add((torniqueteId, solicitudId, resultado));
+        return Task.CompletedTask;
+    }
+
+    public List<SolicitudPendiente> SolicitudesNuevas { get; } = [];
+
+    public List<(Guid ClienteId, decimal Saldo, CausaSaldo Causa)> Saldos { get; } = [];
+
+    public List<(Guid ClienteId, IntentoAcceso Intento, string Torniquete)> Viajes { get; } = [];
+
+    public Task SolicitudNuevaAsync(SolicitudPendiente solicitud, CancellationToken ct = default)
+    {
+        SolicitudesNuevas.Add(solicitud);
+        return Task.CompletedTask;
+    }
+
+    public Task SaldoActualizadoAsync(Guid clienteId, decimal saldo, CausaSaldo causa, CancellationToken ct = default)
+    {
+        Saldos.Add((clienteId, saldo, causa));
+        return Task.CompletedTask;
+    }
+
+    public Task EventoViajeAsync(Guid clienteId, IntentoAcceso intento, string torniqueteNombre, CancellationToken ct = default)
+    {
+        Viajes.Add((clienteId, intento, torniqueteNombre));
         return Task.CompletedTask;
     }
 }

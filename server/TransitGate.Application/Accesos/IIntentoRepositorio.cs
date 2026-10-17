@@ -13,4 +13,7 @@ public interface IIntentoRepositorio
 
     /// <summary>Los más recientes primero (RF-32).</summary>
     Task<IReadOnlyList<IntentoAcceso>> ListarPorTorniqueteAsync(string torniqueteId, int limite, CancellationToken ct = default);
+
+    /// <summary>Los más recientes primero, para el historial del cliente (RF-39).</summary>
+    Task<IReadOnlyList<IntentoAcceso>> ListarPorTarjetaAsync(Guid tarjetaId, int limite, CancellationToken ct = default);
 }

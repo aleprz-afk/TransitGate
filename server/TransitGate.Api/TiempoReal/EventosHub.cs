@@ -13,6 +13,8 @@ public sealed class EventosHub(MonitorTorniquetes monitor) : Hub
     public const string Ruta = "/hubs/eventos";
     public const string GrupoOperacion = "operacion";
 
+    public static string GrupoCliente(Guid clienteId) => $"cliente:{clienteId:N}";
+
     public override async Task OnConnectedAsync()
     {
         await Groups.AddToGroupAsync(Context.ConnectionId, GrupoOperacion);

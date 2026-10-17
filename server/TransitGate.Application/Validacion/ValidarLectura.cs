@@ -37,6 +37,7 @@ public sealed class ValidarLectura(
             return null;
 
         IntentoAcceso? intento = null;
+        SoporteResuelto? soporte = null;
         Registro? registro = null;
         using (await cerrojo.TomarAsync(torniqueteId, ct))
         {
@@ -61,7 +62,7 @@ public sealed class ValidarLectura(
             else
             {
                 antes = torniquete.Deseado;
-                intento = await DecidirAsync(torniquete, lectura, ct);
+                (intento, soporte) = await DecidirAsync(torniquete, lectura, ct);
                 await intentos.AgregarAsync(intento, ct);
                 await unidadDeTrabajo.GuardarCambiosAsync(ct);
 
@@ -79,6 +80,14 @@ public sealed class ValidarLectura(
         }
 
         await notificador.IntentoRegistradoAsync(intento!, ct);
+        if (soporte is not null)
+        {
+            // Al cliente: el viaje aparece en su historial y el saldo baja en vivo (RF-39 CA4, RF-16 CA2).
+            await notificador.EventoViajeAsync(soporte.ClienteId, intento!, torniquete.Nombre, ct);
+            if (intento!.Resultado == ResultadoIntento.Exitoso)
+                await notificador.SaldoActualizadoAsync(soporte.ClienteId, intento.SaldoRestante!.Value, CausaSaldo.Paso, ct);
+        }
+
         return ResultadoLectura.Desde(intento!);
     }
 
@@ -101,15 +110,16 @@ public sealed class ValidarLectura(
         return new Registro(solicitudId, resultado, respuesta);
     }
 
-    private async Task<IntentoAcceso> DecidirAsync(Torniquete torniquete, Lectura lectura, CancellationToken ct)
+    private async Task<(IntentoAcceso Intento, SoporteResuelto? Soporte)> DecidirAsync(
+        Torniquete torniquete, Lectura lectura, CancellationToken ct)
     {
         // Se identifica la tarjeta aunque el torniquete esté ocupado, para que el rechazo quede en su historial.
         var soporte = await soportes.PorUidAsync(lectura.Uid);
         var intentoId = await intentos.SiguienteIdAsync(ct);
 
-        IntentoAcceso Rechazo(MotivoIntento motivo) => IntentoAcceso.Rechazado(
+        (IntentoAcceso, SoporteResuelto?) Rechazo(MotivoIntento motivo) => (IntentoAcceso.Rechazado(
             intentoId, lectura.TorniqueteId, lectura.LecturaId, lectura.Fecha,
-            TipoSoporte.Fisico, lectura.Uid, soporte?.TarjetaId, motivo);
+            TipoSoporte.Fisico, lectura.Uid, soporte?.TarjetaId, motivo), soporte);
 
         if (torniquete.MotivoNoDisponible is { } motivoTorniquete)
             return Rechazo(motivoTorniquete);
@@ -127,9 +137,9 @@ public sealed class ValidarLectura(
             return Rechazo(MotivoIntento.SaldoInsuficiente);
 
         var paso = torniquete.AutorizarPaso(pasoId, lectura.Fecha, parametros.VentanaPaso, parametros.GraciaVision);
-        return IntentoAcceso.Exitoso(
+        return (IntentoAcceso.Exitoso(
             intentoId, lectura.TorniqueteId, lectura.LecturaId, lectura.Fecha,
-            TipoSoporte.Fisico, lectura.Uid, soporte.TarjetaId, tarifa, paso.Id, debito.SaldoRestante);
+            TipoSoporte.Fisico, lectura.Uid, soporte.TarjetaId, tarifa, paso.Id, debito.SaldoRestante), soporte);
     }
 
     private sealed record Lectura(string TorniqueteId, string LecturaId, string Uid, DateTime Fecha);

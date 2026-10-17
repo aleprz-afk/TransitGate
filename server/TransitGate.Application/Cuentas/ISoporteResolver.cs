@@ -2,10 +2,11 @@ using TransitGate.Domain.Tarjetas;
 
 namespace TransitGate.Application.Cuentas;
 
-// Contrato C7 (contratos de integración §7): lo implementa el módulo de cuentas (Jeisy)
-// y lo consume el de validación (Alex). Cambiarlo requiere PR con la etiqueta "contrato".
+// Contrato C7 (contratos de integración §7): lo implementa el módulo de cuentas y lo consume el de
+// validación. Cambiarlo requiere PR con la etiqueta "contrato".
 
-public record SoporteResuelto(Guid SoporteId, Guid TarjetaId, EstadoSoporte Estado);
+/// <summary>ClienteId sirve para avisarle al cliente de su paso y su saldo nuevo (RF-16 CA2, RF-39 CA4).</summary>
+public record SoporteResuelto(Guid SoporteId, Guid TarjetaId, Guid ClienteId, EstadoSoporte Estado);
 
 public interface ISoporteResolver
 {
