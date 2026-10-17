@@ -1,6 +1,6 @@
-# Cambios del servidor: validación y torniquete
+# Cambios del servidor
 
-Responsable: Alex · Última actualización: 16 de octubre de 2026 · Todo está en `main` hasta el PR #11; en curso: `feat/web-esqueleto`. Los contratos están en `docs/`: Contrato de la API v1.2 y Contratos de integración v1.5
+Responsable: Alex · Última actualización: 16 de octubre de 2026 · Todo está en `main` hasta el PR #12; en curso: `feat/modo-registro`. Los contratos están en `docs/`: Contrato de la API v1.3 y Contratos de integración v1.6
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -11,12 +11,13 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - La lectura valida torniquete, soporte y saldo en el orden de RF-20, debita la tarifa (3.200) y abre un paso. Cada lectura deja un `IntentoAcceso` con su resultado y motivo (RF-23).
 - El latido devuelve el estado deseado, registra la señal de vida y confirma la apertura del brazo.
 - Los cruces consumen el paso, detectan colados y activan la alarma.
+- **Entrega en taquilla:** el operador elige una solicitud de tarjeta física y pone el lector en modo registro; la siguiente tarjeta que se acerca queda ligada a esa solicitud, en `Entregada` (RF-09, RF-10, RF-36).
 - El hub de SignalR `/hubs/eventos` envía `EstadoTorniquete` en vivo: estado, conexión del ESP32 y de la visión, y desincronización.
 - Todo vive en memoria hasta que esté la base de datos (PostgreSQL en Docker, ver "Decisiones"): **al reiniciar la API se pierde el estado**.
 - El ESP32 y la visión se identifican con la cabecera `X-Device-Key`. Por ahora en **modo tolerante**: no se rechaza nada, solo queda en el log.
 - La API sirve la web (React) en el mismo puerto: `http://<IP>:5000/`. El proyecto de la web ya está en `web/`, con el proxy de desarrollo, los tipos generados desde el OpenAPI y una página de prueba del panel.
 - Los números del JSON se reciben solo como números: `"pasoIdAbierto": "5"` (entre comillas) responde 400.
-- Hay 80 pruebas automatizadas (dominio y casos de uso), una por criterio de aceptación.
+- Hay 89 pruebas automatizadas (dominio y casos de uso), una por criterio de aceptación.
 
 ## Decisiones
 
@@ -32,7 +33,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 4. **PostgreSQL cumple los RNF de fiabilidad:** transacciones reales para guardar el paso completo (RNF-15) y control de concurrencia sobre el saldo (RNF-16).
 5. **Docker iguala el entorno de todos:** misma versión y misma configuración con un solo comando. Si algún día se quiere publicar en la nube, es el mismo PostgreSQL: solo cambia la cadena de conexión.
 
-**Cómo se usa** (lo prepara Jeisy, dueña de la base de datos):
+**Cómo se usa** (llega con el tercer PR del módulo de cuentas):
 
 - Requisito: Docker Desktop instalado y abierto.
 - En la raíz del repo habrá un `docker-compose.yml` con PostgreSQL. La contraseña no va en el repo (RNF-25): va en un archivo `.env`, que git ya ignora, y en el repo se sube un `.env.example` con valores falsos. Propuesta:
@@ -62,6 +63,18 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 
 - En la laptop de la demo, Docker Desktop tiene que estar abierto **antes** de arrancar la API.
 
+### Alex toma el módulo de cuentas, tarjetas y saldo (16 de octubre)
+
+**Qué:** el módulo de cuentas (C7: `Cliente`, `Tarjeta`, `SoporteTarjeta`, `Recarga`, `Tarifa`, `Operador`), la base de datos y la sesión con Identity los construye Alex. Jeisy revisa los PR de ese módulo y sigue con la app Android (C2, C5).
+
+**Por qué:**
+
+1. El H2 (30 de octubre) muestra registro, solicitud, entrega, recarga e historial, y todo eso depende de este módulo, que aún no había empezado.
+2. El backend de validación ya está adelantado y comparte las mismas interfaces (C7), así que el cambio no rompe nada de lo construido.
+3. Una sola persona en la base de datos evita migraciones cruzadas en estas dos semanas.
+
+**Cómo se hace:** en tres PR seguidos: (1) modo registro y taquilla, (2) cuentas, tarjetas y saldo en memoria, (3) PostgreSQL con Docker, Identity y las rutas del cliente. La separación entre módulos se mantiene: validación solo habla con cuentas por las interfaces de C7.
+
 ## Qué necesita saber cada uno
 
 ### Karol — firmware del ESP32 (interfaz C1)
@@ -87,6 +100,15 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 | `0BADCAFE` | Bloqueada | 50.000 | `SoporteBloqueado` |
 | `5011C17A` | Entregada | 0 | `SoporteNoActivo` |
 | cualquier otro | — | — | `TarjetaNoRegistrada` |
+
+- **Modo registro** (entrega de tarjetas en taquilla): mientras el latido responda `"modoRegistro": true`, la lectura no es un paso y el brazo no se mueve. Puedes encender un LED. Las respuestas posibles:
+
+  ```json
+  { "accion": "registrada", "lecturaId": "a1f3-0007" }    // tarjeta ligada; el modo registro termina
+  { "accion": "denegar", "motivo": "UidYaRegistrado" }     // esa tarjeta ya es de alguien; sigue en modo registro
+  ```
+
+  Con `registrada` no hay que abrir el brazo ni mandar `pasoIdAbierto`. El reintento con el mismo `lecturaId` recibe la misma respuesta.
 
 ### Wili — servicio de visión (interfaz C4)
 
@@ -128,6 +150,19 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
   await conexion.start();
   ```
 
+- **Taquilla (RF-36, RF-09, RF-10):**
+  - `GET /api/tarjetas/solicitudes` devuelve las solicitudes pendientes, la más antigua primero: `[{ solicitudId, clienteId, nombreCompleto, documento, fecha }]`. El `documento` viene con solo los 4 últimos dígitos (`••••••6789`), salvo al buscar con `?documento=1032456789`, que lo devuelve completo (RNF-27). Si la búsqueda no encuentra nada, la lista viene vacía: ahí va el mensaje "Sin solicitud pendiente" (RF-36 CA2).
+  - `POST /api/torniquetes/tq_1/modo-registro` con `{ "solicitudId": "s_…" }` responde `{ "expiraEn": 60 }` (botón "Entregar", RF-36 CA3). Si el torniquete no está en `Cerrado` responde 409 `TorniqueteOcupado`; si la solicitud ya se entregó, 404 `SolicitudNoEncontrada`.
+  - Mientras dura, `EstadoTorniquete` llega con `estado: "ModoRegistro"`: ahí va el "Acerque la tarjeta" (RF-09 CA1). Si pasan 60 s sin tarjeta vuelve a `Cerrado` y la solicitud sigue en la lista.
+  - El resultado de la lectura llega en el evento `RegistroTarjeta` (tipo en `src/api/eventos.ts`):
+
+    ```json
+    RegistroTarjeta { "torniqueteId": "tq_1", "solicitudId": "s_…", "resultado": "Ligado|UidYaRegistrado|SolicitudNoPendiente", "fecha": "…" }
+    ```
+
+    `Ligado` → "Tarjeta entregada" y la solicitud sale de la lista (CA4); `UidYaRegistrado` → "Tarjeta ya registrada", el torniquete sigue esperando otra tarjeta (RF-10 CA2).
+  - Hay dos solicitudes de prueba: Luisa Rojas (`1032456789`) y Mateo Díaz (`1121987654`).
+
 - **Más eventos en el grupo `operacion`**, con el contenido del contrato C6:
 
   ```json
@@ -148,19 +183,13 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - Estas rutas funcionan **sin sesión** por ahora; exigirán sesión de operador cuando esté Identity.
 - El OpenAPI para generar los tipos TypeScript está en `http://<IP>:5000/openapi/v1.json`.
 
-### Jeisy — cuentas, tarjetas y saldo (interfaz C7)
+### Jeisy — revisión del módulo de cuentas (interfaz C7)
 
-- Las interfaces del contrato C7 están en `server/TransitGate.Application/Cuentas/`: `ISoporteResolver` e `ISaldoService`, copiadas del documento de integración.
-- Mientras no estén tus implementaciones, la API usa `CuentasDePrueba` (en memoria, en `TransitGate.Api/Esqueleto/`). Para pasar a la base de datos se cambia la línea `AddEsqueletoEnMemoria` de `Program.cs` por el registro de Infrastructure.
-- Tres decisiones que el contrato no definía y que conviene revisar juntos:
-  1. Creé el enum `EstadoSoporte` (`Solicitada`, `Entregada`, `Activa`, `Bloqueada`) en `Domain/Tarjetas/`. Es de tu módulo: muévelo o ajústalo si lo necesitas.
-  2. `ResultadoDebito` quedó como `(bool Exitoso, decimal SaldoRestante)`. Si el saldo no alcanza, no se descuenta nada (S3).
-  3. C7 usa `decimal` para el dinero y el JSON usa enteros (RNF-24). Hoy la API convierte a entero al responder.
-- El id del paso se reserva **antes** de debitar, porque `DebitarAsync` lo recibe.
-- `INotificador` (también de C7, lo implemento yo) está en `Application/Notificaciones/`. Por ahora solo tiene `EstadoTorniqueteAsync`, que recibe el estado ya calculado y no el id del torniquete que dice el contrato. Cuando agregue `SaldoActualizadoAsync` para tus recargas, te aviso.
-- **Transacción del paso (RNF-15):** `ValidarLectura` termina con un solo `IUnidadDeTrabajo.GuardarCambiosAsync` (en `Application/`). Con EF Core, la idea es que tu `DbContext` lo implemente y que `ISaldoService` y mis repositorios compartan ese mismo `DbContext`, así el débito, el paso y el intento se guardan juntos o no se guarda ninguno.
-- **Ids:** los pasos y los intentos piden su id antes de guardarse (`SiguientePasoIdAsync`, `SiguienteIdAsync`). En PostgreSQL esto se resuelve con secuencias (`UseHiLo` de Npgsql).
-- Agregué el enum `TipoSoporte` (`Fisico`, `Virtual`) en `Domain/Tarjetas/` porque `IntentoAcceso` lo guarda (RF-23). También es de tu módulo.
+- Desde el 16 de octubre el módulo de cuentas, la base de datos e Identity los construyo yo (ver "Decisiones"). Te pido que revises esos PR: eres revisora de C7, y si ya tenías algo avanzado sin subir, avísame para no repetirlo.
+- Lo que cambió en C7 (contratos de integración v1.6): nueva interfaz `ISolicitudesTarjeta` en `Application/Cuentas/` para la entrega en taquilla (`PendientePorIdAsync`, `PendientesAsync`, `LigarUidAsync`). Una solicitud es el `SoporteTarjeta` físico en `Solicitada`; su id es el del soporte.
+- Por ahora `CuentasDePrueba` (en memoria, en `TransitGate.Api/Esqueleto/`) implementa todo C7. En el siguiente PR la reemplazan el dominio real (`Cliente`, `Tarjeta`, `SoporteTarjeta`, `Recarga`) y sus casos de uso.
+- Decisiones de C7 que siguen vigentes: `EstadoSoporte` y `TipoSoporte` están en `Domain/Tarjetas/`; `ResultadoDebito` es `(bool Exitoso, decimal SaldoRestante)` y si el saldo no alcanza no se descuenta nada (S3); el dinero es `decimal` adentro y entero en el JSON; el id del paso se reserva antes de debitar; el débito, el paso y el intento se guardan con un solo `IUnidadDeTrabajo.GuardarCambiosAsync` (RNF-15).
+- Para la app (C5) no cambia nada todavía: las rutas `/api/auth/*` y `/api/tarjetas/mi-tarjeta/soporte-virtual` llegan con Identity.
 
 ## Credenciales de los dispositivos (RNF-20)
 
@@ -210,17 +239,24 @@ dotnet run --project TransitGate.Api | Tee-Object -FilePath mediciones.log
 
 | Limitación | Cuándo se resuelve |
 | --- | --- |
-| Todo en memoria; se pierde al reiniciar | Cuando esté la base de datos (Jeisy, semana 2) |
+| Todo en memoria; se pierde al reiniciar | Con PostgreSQL (tercer PR del módulo de cuentas) |
 | `X-Device-Key` en modo tolerante | Se activa el modo estricto después del H1 (semana 3) |
-| Las rutas del panel no piden sesión | Con Identity (Jeisy, semana 3) |
+| Las rutas del panel y de la taquilla no piden sesión | Con Identity (tercer PR del módulo de cuentas) |
 | La transacción del paso (RNF-15) está definida pero en memoria no se deshace nada si algo falla a la mitad | Cuando esté la base de datos; ahí se agrega la prueba con fallo forzado |
-| Una lectura en modo registro se rechazaría como `TorniqueteOcupado` y dejaría un intento (RF-23 CA3 pide que no deje ninguno) | Semana 4, con la ruta del modo registro |
 | No se revierte el débito si el brazo no abre (RF-46) | Semana 6 |
-| SignalR todavía no envía los eventos del cliente (`SaldoActualizado`, `EventoViaje`) ni `SolicitudNueva` | Con Identity y las tarjetas de Jeisy (semanas 3 y 4) |
-| Quién apagó la alarma no queda registrado (HU-22 CA1 pide "con mi nombre") | Con Identity (semana 3) |
-| Modo registro sin ruta todavía; el desafío del celular es fijo | Semanas 4 y Fase 4 |
+| SignalR todavía no envía los eventos del cliente (`SaldoActualizado`, `EventoViaje`) ni `SolicitudNueva` | `SolicitudNueva` y `SaldoActualizado` con el segundo PR del módulo de cuentas; `EventoViaje` con Identity |
+| Quién apagó la alarma no queda registrado (HU-22 CA1 pide "con mi nombre") | Con Identity |
+| El desafío del celular es fijo | Fase 4 |
+| Una tarjeta entregada en taquilla no se puede activar todavía: responde `SoporteNoActivo` hasta que exista "confirmar recepción" (RF-11) | Siguiente PR (cuentas, tarjetas y saldo) |
+| Las solicitudes de tarjeta son datos de prueba fijos; todavía no se pueden crear desde el portal (RF-08) | Siguiente PR (cuentas, tarjetas y saldo) |
 
 ## Historial
+
+**16 de octubre (semana 2), segunda parte**
+- Entrega de tarjetas en taquilla: `GET /api/tarjetas/solicitudes` (RF-36) y `POST /api/torniquetes/{id}/modo-registro` (RF-09). La lectura en modo registro liga el UID a la solicitud y la deja `Entregada` (RF-10); un UID ya registrado no se liga y el torniquete sigue esperando otra tarjeta.
+- Una lectura en modo registro ya no deja `IntentoAcceso` (RF-23 CA3).
+- Evento `RegistroTarjeta` para el panel.
+- Alex toma el módulo de cuentas, tarjetas y saldo; Jeisy queda como revisora (Contratos de integración v1.6, C7). Contrato de la API v1.3.
 
 **16 de octubre (semana 2)**
 - Proyecto de la web en `web/` (Vite + React + TypeScript): proxy hacia la API, tipos generados desde el OpenAPI, conexión a SignalR y una página de prueba del panel.

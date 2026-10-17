@@ -1,6 +1,6 @@
 # server
 
-Servidor ASP.NET Core (API, dominio, base de datos). Dueños: Alex (validación) y Jeisy (cuentas).
+Servidor ASP.NET Core (API, dominio, base de datos). Dueño: Alex (validación y cuentas; Jeisy revisa cuentas).
 
 ## Ejecutar
 
@@ -32,6 +32,8 @@ Mientras no hay base de datos, todo vive en memoria (`TransitGate.Api/Esqueleto`
 | Hub `/hubs/eventos` | Evento `EstadoTorniquete` en vivo al grupo `operacion` (sin sesión todavía) |
 | `GET /api/alertas?estado=` | Alertas de colado, opcionalmente por estado (sin sesión todavía) |
 | `POST /api/alertas/{id}/apagar-alarma` | Apaga la alarma y deja la alerta Atendida (sin sesión todavía) |
+| `GET /api/tarjetas/solicitudes?documento=` | Solicitudes de tarjeta física pendientes, la más antigua primero (sin sesión todavía) |
+| `POST /api/torniquetes/{id}/modo-registro` | Pone el lector en modo registro para entregar la tarjeta de una solicitud (sin sesión todavía) |
 | Cualquier otra ruta | La web compilada en `wwwroot` (`index.html`); una ruta desconocida bajo `/api` responde 404 |
 
 Tarjetas de prueba (sección `DatosDePrueba` de `appsettings.json`, tarifa 3.200):
@@ -43,6 +45,8 @@ Tarjetas de prueba (sección `DatosDePrueba` de `appsettings.json`, tarifa 3.200
 | `0BADCAFE` | Bloqueada | 50.000 | `SoporteBloqueado` |
 | `5011C17A` | Entregada | 0 | `SoporteNoActivo` |
 | cualquier otro | — | — | `TarjetaNoRegistrada` |
+
+Solicitudes de prueba (sección `Solicitudes`): Luisa Rojas (documento `1032456789`, saldo 10.000) y Mateo Díaz (`1121987654`, saldo 0). Al ligarles un UID en modo registro, su tarjeta queda `Entregada` y responde `SoporteNoActivo` hasta que el cliente confirme la recepción.
 
 Para probar con una tarjeta real, agrega su UID a esa lista. Los tiempos (expiración del paso, gracia de visión y plazo de conexión del ESP32) están en la sección `Operacion`.
 
