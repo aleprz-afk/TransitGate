@@ -21,6 +21,7 @@ public static class RegistroEsqueleto
         services.AddSingleton<CuentasDePrueba>();
         services.AddSingleton<ISoporteResolver>(sp => sp.GetRequiredService<CuentasDePrueba>());
         services.AddSingleton<ISaldoService>(sp => sp.GetRequiredService<CuentasDePrueba>());
+        services.AddSingleton<ISolicitudesTarjeta>(sp => sp.GetRequiredService<CuentasDePrueba>());
         services.AddSingleton<ICruceRepositorio, CruceRepositorioEnMemoria>();
         services.AddSingleton<IAlertaRepositorio, AlertaRepositorioEnMemoria>();
         return services;

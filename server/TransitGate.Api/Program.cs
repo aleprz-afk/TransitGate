@@ -9,6 +9,7 @@ using TransitGate.Application.Accesos;
 using TransitGate.Application.Alertas;
 using TransitGate.Application.Dispositivos;
 using TransitGate.Application.Notificaciones;
+using TransitGate.Application.Taquilla;
 using TransitGate.Application.Torniquetes;
 using TransitGate.Application.Validacion;
 
@@ -40,6 +41,9 @@ builder.Services.AddScoped<ConsultarIntentos>();
 builder.Services.AddScoped<RegistrarCruce>();
 builder.Services.AddScoped<ApagarAlarma>();
 builder.Services.AddScoped<ConsultarAlertas>();
+builder.Services.AddScoped<ActivarModoRegistro>();
+builder.Services.AddScoped<ConsultarSolicitudes>();
+builder.Services.AddSingleton<RespuestasDeRegistro>();
 builder.Services.Configure<OpcionesDispositivos>(builder.Configuration.GetSection(OpcionesDispositivos.Seccion));
 builder.Services.AddSingleton<IClavesDispositivos, ClavesDesdeConfiguracion>();
 builder.Services.AddSingleton<VerificadorClaveDispositivo>();
@@ -62,6 +66,7 @@ app.MapGet("/api/salud", () => Results.Ok(new { estado = "ok", hora = DateTime.U
     .WithTags("Diagnóstico");
 
 app.MapDispositivos();
+app.MapTaquilla();
 app.MapHub<EventosHub>(EventosHub.Ruta);
 
 // Cualquier otra ruta es de la web (React Router resuelve la página en el navegador),

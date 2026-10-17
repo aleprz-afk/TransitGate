@@ -1,3 +1,4 @@
+using TransitGate.Application.Taquilla;
 using TransitGate.Application.Torniquetes;
 using TransitGate.Application.Validacion;
 using TransitGate.Domain.Accesos;
@@ -26,11 +27,13 @@ public class ValidarLecturaTests
             _intentos,
             _cuentas,
             _cuentas,
+            new SolicitudesFalsas(),
             _unidadDeTrabajo,
             _notificador,
             _parametros,
             new CerrojoTorniquetes(),
             Bitacora.Nula(),
+            new RespuestasDeRegistro(),
             new RelojFijo(Ahora));
     }
 

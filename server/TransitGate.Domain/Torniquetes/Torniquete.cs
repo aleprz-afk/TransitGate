@@ -32,6 +32,9 @@ public class Torniquete
 
     public DateTime? ModoRegistroHasta { get; private set; }
 
+    /// <summary>La solicitud de tarjeta física (el SoporteTarjeta en Solicitada) que se entrega en este modo registro.</summary>
+    public Guid? SolicitudEnRegistro { get; private set; }
+
     /// <summary>Último latido del ESP32. La conexión no es un estado: se deduce de esta hora (S14).</summary>
     public DateTime? UltimaSenalEsp32 { get; private set; }
 
@@ -155,6 +158,7 @@ public class Torniquete
         PasoPendiente?.Expirar();   // el cruce cayó fuera de la ventana (RF-29 CA4)
         PasoPendiente = null;
         ModoRegistroHasta = null;   // RF-28 CA5: se cancela el modo registro
+        SolicitudEnRegistro = null;
         CambiarEstado(EstadoTorniquete.Alarma, ahora);
         return ResultadoCruce.Fraude(alertaNueva: true);
     }
@@ -168,8 +172,11 @@ public class Torniquete
         CambiarEstado(EstadoTorniquete.Cerrado, ahora);
     }
 
-    /// <summary>El operador pone el lector en modo registro para ligar una tarjeta nueva (RF-09, S6).</summary>
-    public void ActivarModoRegistro(DateTime ahora, TimeSpan duracion)
+    /// <summary>
+    /// El operador pone el lector en modo registro para ligar una tarjeta nueva a la solicitud
+    /// <paramref name="solicitudId"/> (RF-09, S6).
+    /// </summary>
+    public void ActivarModoRegistro(DateTime ahora, TimeSpan duracion, Guid solicitudId)
     {
         ActualizarPorTiempo(ahora);
         if (Estado != EstadoTorniquete.Cerrado)
@@ -177,6 +184,7 @@ public class Torniquete
 
         CambiarEstado(EstadoTorniquete.ModoRegistro, ahora);
         ModoRegistroHasta = ahora + duracion;
+        SolicitudEnRegistro = solicitudId;
     }
 
     /// <summary>El UID leído ya se ligó a la solicitud (RF-10): el torniquete vuelve a Cerrado.</summary>
@@ -191,6 +199,7 @@ public class Torniquete
     private void SalirDeModoRegistro(DateTime momento)
     {
         ModoRegistroHasta = null;
+        SolicitudEnRegistro = null;
         CambiarEstado(EstadoTorniquete.Cerrado, momento);
     }
 

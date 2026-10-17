@@ -486,6 +486,123 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/tarjetas/solicitudes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Solicitudes de tarjeta física pendientes, la más antigua primero; ?documento= para buscar una (RF-36). Sin sesión hasta que exista Identity */
+        get: {
+            parameters: {
+                query?: {
+                    estado?: string;
+                    documento?: string;
+                };
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["SolicitudResumen"][];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/torniquetes/{id}/modo-registro": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pone el lector en modo registro para entregar la tarjeta de una solicitud (RF-09, S6). Sin sesión hasta que exista Identity */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path: {
+                    id: string;
+                };
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SolicitudModoRegistro"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RespuestaModoRegistro"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -536,6 +653,11 @@ export interface components {
             /** Format: int32 */
             saldoRestante?: null | number;
             motivo?: null | string;
+            lecturaId?: null | string;
+        };
+        RespuestaModoRegistro: {
+            /** Format: int32 */
+            expiraEn: number;
         };
         SolicitudCruce: {
             /** Format: int64 */
@@ -562,6 +684,17 @@ export interface components {
             lecturaId: null | string;
             tipo: null | string;
             valor: null | string;
+        };
+        SolicitudModoRegistro: {
+            solicitudId: null | string;
+        };
+        SolicitudResumen: {
+            solicitudId: string;
+            clienteId: string;
+            nombreCompleto: string;
+            documento: string;
+            /** Format: date-time */
+            fecha: string;
         };
         TorniqueteResumen: {
             id: string;

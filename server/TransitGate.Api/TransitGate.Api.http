@@ -58,3 +58,14 @@ GET {{host}}/api/torniquetes/{{tq}}/intentos
 ###
 # Apagar la alarma (el id sale de la respuesta "fraude")
 POST {{host}}/api/alertas/al_1/apagar-alarma
+
+###
+# Solicitudes de tarjeta física pendientes (RF-36); con ?documento= busca una
+GET {{host}}/api/tarjetas/solicitudes
+
+###
+# Modo registro para entregar la tarjeta de una solicitud (el id sale de la lista de solicitudes)
+POST {{host}}/api/torniquetes/{{tq}}/modo-registro
+Content-Type: application/json
+
+{ "solicitudId": "s_reemplazar-por-el-id" }

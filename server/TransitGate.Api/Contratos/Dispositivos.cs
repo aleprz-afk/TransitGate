@@ -15,16 +15,15 @@ public record RespuestaLectura(
     string Accion,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] long? PasoId = null,
     [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] int? SaldoRestante = null,
-    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Motivo = null)
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? Motivo = null,
+    [property: JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)] string? LecturaId = null)
 {
-    public static RespuestaLectura Abrir(long pasoId, int saldoRestante) => new("abrir", pasoId, saldoRestante);
-
-    public static RespuestaLectura Denegar(MotivoIntento motivo) => new("denegar", Motivo: motivo.ToString());
-
-    public static RespuestaLectura Desde(ResultadoLectura resultado) =>
-        resultado.Autorizado
-            ? Abrir(resultado.PasoId!.Value, (int)resultado.SaldoRestante!.Value)
-            : Denegar(resultado.Motivo!.Value);
+    public static RespuestaLectura Desde(ResultadoLectura resultado, string lecturaId) => resultado.Accion switch
+    {
+        AccionLectura.Abrir => new("abrir", resultado.PasoId, (int)resultado.SaldoRestante!.Value),
+        AccionLectura.Registrada => new("registrada", LecturaId: lecturaId),   // Contrato §4: el brazo no se mueve
+        _ => new("denegar", Motivo: resultado.Motivo),
+    };
 }
 
 public record SolicitudLatido(string? BrazoReal, bool? SirenaReal, long? PasoIdAbierto, string? Arranque, string? Fw);

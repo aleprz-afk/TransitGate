@@ -111,6 +111,8 @@ internal sealed class ParametrosFijos : IParametrosOperacion
     public TimeSpan PlazoSenalEsp32 { get; set; } = TimeSpan.FromSeconds(5);
 
     public TimeSpan PlazoSenalVision { get; set; } = TimeSpan.FromSeconds(15);
+
+    public TimeSpan DuracionModoRegistro { get; set; } = TimeSpan.FromSeconds(60);
 }
 
 internal sealed class NotificadorFalso : INotificador
@@ -145,6 +147,48 @@ internal sealed class NotificadorFalso : INotificador
     {
         AlertasActualizadas.Add(alerta);
         return Task.CompletedTask;
+    }
+
+    public List<(string TorniqueteId, Guid SolicitudId, ResultadoLigar Resultado)> Registros { get; } = [];
+
+    public Task RegistroTarjetaAsync(string torniqueteId, Guid solicitudId, ResultadoLigar resultado, CancellationToken ct = default)
+    {
+        Registros.Add((torniqueteId, solicitudId, resultado));
+        return Task.CompletedTask;
+    }
+}
+
+/// <summary>Solicitudes de tarjeta física: el UID se liga si nadie más lo tiene (RF-10).</summary>
+internal sealed class SolicitudesFalsas : ISolicitudesTarjeta
+{
+    private readonly List<SolicitudPendiente> _pendientes = [];
+
+    public Dictionary<string, Guid> UidsLigados { get; } = [];
+
+    public SolicitudPendiente Agregar(string documento, DateTime fecha)
+    {
+        var solicitud = new SolicitudPendiente(Guid.NewGuid(), Guid.NewGuid(), "Luisa Rojas", documento, fecha);
+        _pendientes.Add(solicitud);
+        return solicitud;
+    }
+
+    public Task<SolicitudPendiente?> PendientePorIdAsync(Guid soporteId) =>
+        Task.FromResult(_pendientes.FirstOrDefault(s => s.SoporteId == soporteId));
+
+    public Task<IReadOnlyList<SolicitudPendiente>> PendientesAsync(string? documento) =>
+        Task.FromResult<IReadOnlyList<SolicitudPendiente>>(
+            [.. _pendientes.Where(s => documento is null || s.Documento == documento).OrderBy(s => s.Fecha)]);
+
+    public Task<ResultadoLigar> LigarUidAsync(Guid soporteId, string uidHex)
+    {
+        if (_pendientes.FirstOrDefault(s => s.SoporteId == soporteId) is not { } solicitud)
+            return Task.FromResult(ResultadoLigar.SolicitudNoPendiente);
+        if (UidsLigados.ContainsKey(uidHex))
+            return Task.FromResult(ResultadoLigar.UidYaRegistrado);
+
+        _pendientes.Remove(solicitud);
+        UidsLigados[uidHex] = soporteId;
+        return Task.FromResult(ResultadoLigar.Ligado);
     }
 }
 

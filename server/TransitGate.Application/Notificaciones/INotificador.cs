@@ -1,3 +1,4 @@
+using TransitGate.Application.Cuentas;
 using TransitGate.Domain.Accesos;
 using TransitGate.Domain.Alertas;
 using TransitGate.Domain.Torniquetes;
@@ -32,4 +33,10 @@ public interface INotificador
 
     /// <summary>La alerta cambió de estado, por ejemplo al apagar la alarma (RF-34).</summary>
     Task AlertaActualizadaAsync(AlertaSeguridad alerta, CancellationToken ct = default);
+
+    /// <summary>
+    /// Resultado de una lectura en modo registro, para que la taquilla muestre "Tarjeta entregada" o
+    /// "Tarjeta ya registrada" (RF-10 CA1 y CA2).
+    /// </summary>
+    Task RegistroTarjetaAsync(string torniqueteId, Guid solicitudId, ResultadoLigar resultado, CancellationToken ct = default);
 }

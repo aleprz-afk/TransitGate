@@ -22,6 +22,9 @@ public sealed class OpcionesOperacion
 
     /// <summary>S14: plazo sin señal de la visión para marcarla fuera de línea.</summary>
     public int PlazoSenalVisionSegundos { get; set; } = 15;
+
+    /// <summary>S6: duración máxima del modo registro.</summary>
+    public int DuracionModoRegistroSegundos { get; set; } = 60;
 }
 
 /// <summary>Lee la configuración en cada consulta, así un cambio en appsettings.json aplica sin reiniciar.</summary>
@@ -34,4 +37,6 @@ public sealed class ParametrosDesdeConfiguracion(IOptionsMonitor<OpcionesOperaci
     public TimeSpan PlazoSenalEsp32 => TimeSpan.FromSeconds(opciones.CurrentValue.PlazoSenalEsp32Segundos);
 
     public TimeSpan PlazoSenalVision => TimeSpan.FromSeconds(opciones.CurrentValue.PlazoSenalVisionSegundos);
+
+    public TimeSpan DuracionModoRegistro => TimeSpan.FromSeconds(opciones.CurrentValue.DuracionModoRegistroSegundos);
 }
