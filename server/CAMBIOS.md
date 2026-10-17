@@ -1,6 +1,6 @@
 # Cambios del servidor
 
-Responsable: Alex · Última actualización: 16 de octubre de 2026 · Todo está en `main` hasta el PR #15; en curso: `feat/web-portal-y-panel`. Los contratos están en `docs/`: Contrato de la API v1.4 y Contratos de integración v1.7
+Responsable: Alex · Última actualización: 17 de octubre de 2026 · Todo está en `main` hasta el PR #16; en curso: `feat/firmware-esqueleto`. Los contratos están en `docs/`: Contrato de la API v1.4 y Contratos de integración v1.8
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -64,6 +64,10 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 ## Qué necesita saber cada uno
 
 ### Karol — firmware del ESP32 (interfaz C1)
+
+- **Firmware empezado en `firmware/esp32-main/` (17 de octubre):** lo armé con la ESP32 que tengo, ya con MicroPython 1.29, para no llegar al H2 sin nada. Tiene las reglas de C1 en `controlador.py` (con 12 pruebas en el PC), el cliente HTTP con timeouts (`api.py`, ya probado contra la API), el WiFi, el servo, la sirena, el LED de estado y un lector simulado mientras llega el PN532. Cómo cargarlo y probarlo está en `firmware/esp32-main/README.md`. Tómalo como base: revisa el PR y cambia lo que quieras, sigue siendo tuyo.
+- **Lo que falta y es tuyo:** `lector_pn532.py` (con la misma interfaz que el simulado: `leer()` devuelve el UID en hex mayúsculas o `None`), conectar y calibrar el servo y la sirena (los pulsos de 0,5 y 1,5 ms son un punto de partida), y probarlo todo con la red de la demo. Si tienes código del PN532 o del servo, súbelo y lo juntamos.
+- **`config.json` (contratos v1.8):** agrega `lector` (`"pn532"` o `"simulado"`) y `uidsPrueba`. Copia `config.example.json` como `config.json`; ese archivo no se sube porque lleva la clave del WiFi.
 
 - **Dirección:** `http://<IP de la laptop>:5000`. La primera vez que se corre la API, Windows pregunta por el firewall: hay que permitirla en red **Privada**.
 - **Lectura** `POST /api/torniquetes/tq_1/lecturas`:
@@ -260,6 +264,10 @@ dotnet run --project TransitGate.Api | Tee-Object -FilePath mediciones.log
 | No hay recuperación de contraseña (RF-04) ni administración de operadores (RF-42) | Después del MVP (Should) |
 
 ## Historial
+
+**17 de octubre (semana 2)**
+- Firmware del ESP32 principal en MicroPython (`firmware/esp32-main/`): reglas de C1 con pruebas, cliente HTTP con timeouts, WiFi, servo, sirena, LED de estado y lector simulado. Probado en la placa sin red y, desde el PC, contra la API.
+- Contratos de integración v1.8: `lector` y `uidsPrueba` en el `config.json` del firmware.
 
 **16 de octubre (semana 2), quinta parte**
 - Web completa para el MVP con React Router: inicio de sesión, registro, mi tarjeta (saldo en vivo, pedir y confirmar la física), recargar, viajes, recargas, perfil, panel en vivo y taquilla con modo registro.

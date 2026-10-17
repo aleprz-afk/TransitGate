@@ -1,6 +1,8 @@
-# TransitGate — Contratos de integración (v1.7)
+# TransitGate — Contratos de integración (v1.8)
 
 El [`TransitGate_Contrato_API.md`](./TransitGate_Contrato_API.md) define las rutas HTTP del servidor. Este documento define todo lo demás que dos integrantes distintos deben construir de forma compatible: el protocolo NFC entre la app y el lector, el stream de la cámara, los pines del hardware, los archivos de configuración, los eventos en tiempo real, el contrato interno entre los dos módulos del servidor y los simuladores. Si un integrante cambia algo de aquí sin avisar, se rompe el trabajo de otro.
+
+**Cambios en v1.8 (17 oct 2026):** sección 9 — el `config.json` del firmware agrega `lector` (`"simulado"` o `"pn532"`) y `uidsPrueba`, las tarjetas que "acerca" el lector simulado mientras no está el PN532.
 
 **Cambios en v1.7 (16 oct 2026):** C7 — `SoporteResuelto` agrega `ClienteId`, para avisarle al cliente de su paso y su saldo; `INotificador` agrega `SolicitudNuevaAsync` y `EventoViajeAsync`, y `SaldoActualizadoAsync` recibe la causa como enum (`CausaSaldo`). El contenido de los eventos de la sección 6 no cambia.
 
@@ -319,9 +321,13 @@ Los que tienen secretos (contraseña del WiFi, claves de dispositivo) no se sube
   "timeoutLatidoMs": 250,
   "timeoutLecturaMs": 3000,
   "cierreSinConexionMs": 10000,
-  "pines": { "sda": 21, "scl": 22, "servo": 13, "sirena": 26, "led": 2 }
+  "pines": { "sda": 21, "scl": 22, "servo": 13, "sirena": 26, "led": 2 },
+  "lector": "pn532",
+  "uidsPrueba": ["04A1B2C3", "DEADBEEF"]
 }
 ```
+
+`lector` es `"pn532"` con el lector conectado o `"simulado"` para probar sin él: el botón BOOT "acerca" la siguiente tarjeta de `uidsPrueba`, o se escribe un UID por el puerto serie.
 
 **Servidor** — `appsettings.json`: escucha en `http://0.0.0.0:5000`; los valores por defecto de S4, S6, S8, S12 y S14 van aquí y lo que el administrador guarde en la base de datos prevalece (RNF-40). Las claves de dispositivo y la cadena de conexión van en `dotnet user-secrets`.
 
