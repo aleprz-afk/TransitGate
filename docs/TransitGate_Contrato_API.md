@@ -1,8 +1,15 @@
-# TransitGate — Contrato de la API (v1.3)
+# TransitGate — Contrato de la API (v1.4)
 
 Rutas y formato JSON entre el ESP32 principal, el servicio de visión, la web/app y el servidor. Completa el pendiente de [`TransitGate_Arquitectura_del_sistema_v2.md`](./TransitGate_Arquitectura_del_sistema_v2.md) sección 9. Cubre los 46 RF de `Requisitos funcionales (v2)` y usa sus supuestos (S1–S15).
 
 El detalle de las interfaces que no son HTTP (APDU entre la app y el lector, stream de la cámara, pines, `config.json` y simuladores) está en [`TransitGate_Contratos_de_integracion.md`](./TransitGate_Contratos_de_integracion.md).
+
+**Cambios en v1.4 (16 oct 2026)** (sesión, clientes, tarjetas y saldo con base de datos):
+- Sin sesión la API responde 401 `SesionRequerida` y sin permiso 403 `SinPermiso` (sección 1). `POST /api/auth/login` agrega 400 `LoginIncompleto` y 401 `LoginBloqueado`; se agrega `GET /api/auth/sesion` (sección 2).
+- El registro detalla un código por campo inválido (sección 3). Los ids públicos son `c_…` (cliente), `t_…` (tarjeta), `s_…` (solicitud) y `r_…` (recarga).
+- `POST /api/tarjetas/mi-tarjeta/solicitud-fisica` responde 409 `TarjetaFisicaExistente` (sección 4).
+- Las recargas aceptan la cabecera `Idempotency-Key` (RF-15 CA5) y `simularRechazo` (CA2), y responden también `monto`, `aprobada` y `fecha` (sección 5).
+- El historial de viajes trae `resultado`, `motivo`, `tarifa` y `saldoRestante`; `desde` y `hasta` llegan con RF-40 (sección 9).
 
 **Cambios en v1.3 (16 oct 2026)** (modo registro y taquilla):
 - `POST /api/torniquetes/{id}/modo-registro` responde 400 `SolicitudIdInvalido` y 404 `SolicitudNoEncontrada` o `TorniqueteNoRegistrado`; el 409 `TorniqueteOcupado` también aplica en `Alarma` y si ya está en modo registro (sección 4).
@@ -36,6 +43,7 @@ El detalle de las interfaces que no son HTTP (APDU entre la app y el lector, str
   - `401` — sin sesión o sin credencial de dispositivo. Para los dispositivos el cuerpo es `{ "error": "CredencialInvalida", "mensaje": "…" }`.
   - `403` — sesión válida pero el rol no tiene permiso.
   - `404` — el recurso existe pero es de otro cliente, o no existe (mismo código para no revelar cuál de los dos).
+  - Sin sesión el cuerpo es `{ "error": "SesionRequerida", "mensaje": "Inicia sesión para continuar." }`; sin permiso, `{ "error": "SinPermiso", … }`. La API nunca redirige a una página de login.
 - **Límite de intentos de login:** 6 intentos fallidos bloquean el login temporalmente (RNF-22, RF-02 CA3).
 
 ## 2. Autenticación
@@ -50,8 +58,16 @@ El detalle de las interfaces que no son HTTP (APDU entre la app y el lector, str
 POST /api/auth/login
 { "correo": "ana@example.com", "password": "••••••••" }
 
-→ 200 { "rol": "Cliente" }              (+ cookie de sesión)
-→ 401 { "error": "CredencialesInvalidas", "mensaje": "Correo o contraseña incorrectos." }
+→ 200 { "rol": "Cliente", "nombre": "Ana Ríos" }     (+ cookie de sesión; rol: Cliente | Operador | Seguridad | Administrador)
+→ 400 { "error": "LoginIncompleto", "mensaje": "Escribe tu correo y tu contraseña." }
+→ 401 { "error": "CredencialesInvalidas", "mensaje": "Correo o contraseña incorrectos." }   (también si la cuenta está desactivada, RF-02 CA4)
+→ 401 { "error": "LoginBloqueado", "mensaje": "Demasiados intentos fallidos. Intenta de nuevo en 5 minutos." }   (RNF-22)
+```
+
+```
+GET /api/auth/sesion
+→ 200 { "rol": "Cliente", "nombre": "Ana Ríos" }      (para que la web sepa quién está al recargar la página)
+→ 401
 ```
 
 ```
@@ -91,17 +107,21 @@ POST /api/clientes
 }
 
 → 201 { "clienteId": "c_9f...", "tarjetaId": "t_1a..." }   (+ sesión iniciada; crea Tarjeta con saldo 0, RF-07)
+→ 400 { "error": "NombreRequerido" | "TipoDocumentoInvalido" | "DocumentoInvalido" | "CorreoInvalido" | "TelefonoInvalido", "mensaje": "…" }   (RF-01 CA3: el campo que falla)
 → 400 { "error": "CorreoDuplicado", "mensaje": "Ya existe una cuenta con ese correo." }
 → 400 { "error": "DocumentoDuplicado", "mensaje": "Ya existe una cuenta con ese documento." }
 → 400 { "error": "PasswordCorta", "mensaje": "La contraseña debe tener al menos 8 caracteres." }
 → 400 { "error": "AutorizacionRequerida", "mensaje": "Debes autorizar el tratamiento de datos." }   (RNF-28)
 ```
 
+`tipoDocumento` es `CC`, `CE`, `TI` o `PP`; solo el pasaporte admite letras. `telefono` son 10 dígitos. El correo se guarda en minúsculas.
+
 ```
 GET  /api/clientes/me           → 200 { "clienteId", "nombreCompleto", "correo", "telefono", "tipoDocumento", "numeroDocumento" }
 PATCH /api/clientes/me
 { "telefono": "3009876543" }
 → 200
+→ 400 { "error": "TelefonoInvalido", "mensaje": "El teléfono debe tener 10 dígitos." }
 ```
 
 Todos los endpoints de cliente requieren sesión de rol `Cliente` sobre sus propios datos (401 / 403 / 404 según corresponda, RF-06).
@@ -119,9 +139,12 @@ GET /api/tarjetas/mi-tarjeta
   }
 ```
 
+Si el cliente tiene varios soportes, se muestra el vigente más reciente; si todos están bloqueados, el último bloqueado.
+
 ```
 POST /api/tarjetas/mi-tarjeta/solicitud-fisica            (RF-08)
 → 201 { "solicitudId": "s_44...", "estado": "Solicitada" }
+→ 409 { "error": "TarjetaFisicaExistente", "mensaje": "Ya tienes una tarjeta física solicitada o activa." }   (CA2; con la anterior Bloqueada sí se puede, CA3)
 ```
 
 Entrega y vinculación en taquilla (RF-09, RF-10; el torniquete pasa al estado `ModoRegistro`, S6):
@@ -173,14 +196,19 @@ POST /api/tarjetas/mi-tarjeta/bloquear                       (RF-14)   Actor: Cl
 
 ```
 POST /api/tarjetas/mi-tarjeta/recargas
-{ "monto": 5000 }
-→ 201 { "recargaId": "r_88...", "saldoNuevo": 17000 }
+Idempotency-Key: 6f1c…                       (opcional; la web genera una por cada intento de recarga)
+{ "monto": 5000, "simularRechazo": false }
+→ 201 { "recargaId": "r_88", "monto": 5000, "aprobada": true, "saldoNuevo": 17000, "fecha": "…" }
 → 400 { "error": "MontoFueraDeRango", "mensaje": "El monto debe estar entre 1.000 y 200.000 COP." }   (S8)
+→ 400 { "error": "MontoRequerido", "mensaje": "Falta el monto." }
 ```
+
+- **Pago simulado (RF-15 CA2):** con `"simularRechazo": true` el pago se rechaza: responde 201 con `"aprobada": false`, queda la recarga rechazada y el saldo no cambia.
+- **Doble clic (CA5):** si llega otra recarga con la misma `Idempotency-Key`, responde la misma recarga y no suma otra vez.
 
 ```
 GET /api/tarjetas/mi-tarjeta/recargas
-→ 200 [ { "recargaId": "r_88...", "monto": 5000, "fecha": "2026-09-27T20:30:00Z" }, … ]
+→ 200 [ { "recargaId": "r_88", "monto": 5000, "aprobada": true, "saldoNuevo": 17000, "fecha": "2026-09-27T20:30:00Z" }, … ]   (la más reciente primero, RF-17)
 ```
 
 ---
@@ -309,7 +337,7 @@ POST /api/torniquetes/{id}/vision/latido                     (cada 5 s; fuera de
 
 ## 8. Monitoreo y operación (RF-31 a RF-38)
 
-Requiere sesión de rol `Operador`, `Seguridad` o `Administrador`, salvo donde se indique.
+Requiere sesión de rol `Operador`, `Seguridad` o `Administrador`, salvo donde se indique. En el MVP los tres roles pueden todo lo de esta sección (MVP §3.1).
 
 ```
 GET /api/torniquetes
@@ -354,9 +382,13 @@ GET /api/torniquetes/{id}/video                                                 
 ## 9. Historial del cliente (RF-39, RF-40)
 
 ```
-GET /api/tarjetas/mi-tarjeta/viajes?desde=&hasta=
-→ 200 [ { "intentoId", "torniqueteNombre", "tarifa": 3200, "fecha" }, … ]
+GET /api/tarjetas/mi-tarjeta/viajes
+→ 200 [ { "intentoId": 77, "resultado": "Exitoso", "torniqueteNombre": "Torniquete 1", "tarifa": 3200,
+          "saldoRestante": 6800, "fecha": "…" },
+        { "intentoId": 78, "resultado": "Rechazado", "motivo": "SaldoInsuficiente", "torniqueteNombre": "Torniquete 1", "fecha": "…" }, … ]
 ```
+
+Los últimos 100, el más reciente primero. `tarifa` y `saldoRestante` no vienen en los rechazados; `motivo` no viene en los exitosos. Los filtros `desde` y `hasta` llegan con RF-40.
 
 ---
 
