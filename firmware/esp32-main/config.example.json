@@ -1,0 +1,13 @@
+{
+  "wifi": { "ssid": "POR_DEFINIR", "password": "POR_DEFINIR" },
+  "servidor": "http://192.168.137.10:5000",
+  "torniqueteId": "tq_1",
+  "deviceKey": "POR_DEFINIR",
+  "latidoMs": 300,
+  "timeoutLatidoMs": 250,
+  "timeoutLecturaMs": 3000,
+  "cierreSinConexionMs": 10000,
+  "pines": { "sda": 21, "scl": 22, "servo": 13, "sirena": 26, "led": 2 },
+  "lector": "simulado",
+  "uidsPrueba": ["04A1B2C3", "DEADBEEF", "0BADCAFE", "5011C17A"]
+}

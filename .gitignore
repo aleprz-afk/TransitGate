@@ -483,3 +483,6 @@ $RECYCLE.BIN/
 
 # Web compilada (npm run build en web/); se genera en la laptop de la demo
 server/TransitGate.Api/wwwroot/
+
+# Configuración del firmware con la clave del WiFi y la del dispositivo (RNF-25)
+firmware/esp32-main/config.json
