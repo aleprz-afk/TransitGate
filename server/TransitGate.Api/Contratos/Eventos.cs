@@ -1,3 +1,4 @@
+using TransitGate.Application.Cuentas;
 using TransitGate.Application.Notificaciones;
 using TransitGate.Domain.Accesos;
 using TransitGate.Domain.Alertas;
@@ -50,3 +51,27 @@ public record AlertaActualizadaEvento(string AlertaId, string Estado)
 
 /// <summary>resultado: Ligado, UidYaRegistrado o SolicitudNoPendiente. Sin el UID (RNF-27).</summary>
 public record RegistroTarjetaEvento(string TorniqueteId, string SolicitudId, string Resultado, DateTime Fecha);
+
+/// <summary>cliente va abreviado ("Luisa R."): el panel no muestra más de lo necesario (RNF-27).</summary>
+public record SolicitudNuevaEvento(string SolicitudId, string Cliente, DateTime Fecha)
+{
+    public static SolicitudNuevaEvento Desde(SolicitudPendiente solicitud) => new(
+        IdsPublicos.Solicitud(solicitud.SoporteId), Abreviar(solicitud.NombreCompleto), solicitud.Fecha);
+
+    private static string Abreviar(string nombre)
+    {
+        var partes = nombre.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        return partes.Length < 2 ? nombre : $"{partes[0]} {partes[1][0]}.";
+    }
+}
+
+/// <summary>Al grupo del cliente. causa: Paso, Recarga o Reversion.</summary>
+public record SaldoActualizadoEvento(int Saldo, string Causa, DateTime Fecha);
+
+/// <summary>Al grupo del cliente: un intento con su tarjeta (RF-39 CA4). motivo es null en un exitoso.</summary>
+public record EventoViajeEvento(long IntentoId, string Resultado, string? Motivo, string Torniquete, int? Tarifa, DateTime Fecha)
+{
+    public static EventoViajeEvento Desde(IntentoAcceso intento, string torniqueteNombre) => new(
+        intento.Id, intento.Resultado.ToString(), intento.Motivo?.ToString(), torniqueteNombre,
+        intento.TarifaCobrada is { } tarifa ? (int)tarifa : null, intento.Fecha);
+}

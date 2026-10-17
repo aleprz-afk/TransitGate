@@ -14,8 +14,7 @@ namespace TransitGate.Api.Endpoints;
 
 /// <summary>
 /// Rutas de los dispositivos: ESP32 principal (Contrato §6) y servicio de visión (§7), cada uno con su
-/// X-Device-Key (RNF-20), más las de monitoreo (§8) que hacen falta para probar el flujo completo con los
-/// simuladores (RNF-38). Las de monitoreo todavía no piden sesión; la piden cuando exista Identity.
+/// X-Device-Key (RNF-20), más las de monitoreo (§8), que piden sesión del personal (RF-06).
 /// </summary>
 public static partial class DispositivosEndpoints
 {
@@ -33,15 +32,15 @@ public static partial class DispositivosEndpoints
         vision.MapPost("/vision/latido", LatidoVision)
             .WithSummary("Señal de vida del servicio de visión, cada 5 s (S14)");
 
-        var monitoreo = app.MapGroup("/api").WithTags("Monitoreo");
+        var monitoreo = app.MapGroup("/api").WithTags("Monitoreo").RequireAuthorization(Politicas.Personal);
         monitoreo.MapGet("/torniquetes", ListarTorniquetes)
-            .WithSummary("Estado y conexión de los torniquetes (RF-31, RF-37). Sin sesión hasta que exista Identity");
+            .WithSummary("Estado y conexión de los torniquetes (RF-31, RF-37)");
         monitoreo.MapGet("/torniquetes/{id}/intentos", ListarIntentos)
-            .WithSummary("Últimos 100 intentos de acceso, sin filtros todavía (RF-32). Sin sesión hasta que exista Identity");
+            .WithSummary("Últimos 100 intentos de acceso, sin filtros todavía (RF-32)");
         monitoreo.MapGet("/alertas", ListarAlertas)
-            .WithSummary("Alertas de colado, opcionalmente por estado: ?estado=Abierta (RF-33). Sin sesión hasta que exista Identity");
+            .WithSummary("Alertas de colado, opcionalmente por estado: ?estado=Abierta (RF-33)");
         monitoreo.MapPost("/alertas/{id}/apagar-alarma", ApagarAlarma)
-            .WithSummary("Apaga la alarma y deja la alerta Atendida (RF-34). Sin sesión hasta que exista Identity");
+            .WithSummary("Apaga la alarma y deja la alerta Atendida (RF-34)");
 
         return app;
     }

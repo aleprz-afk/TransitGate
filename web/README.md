@@ -2,11 +2,11 @@
 
 Portal del cliente y panel de operación en React (Vite + TypeScript). Dueña: Ana.
 
-Por ahora hay una página de prueba (`src/App.tsx`) que muestra los torniquetes, las alertas abiertas y los intentos en vivo; sirve para comprobar que el proxy, los tipos y SignalR funcionan, y se reemplaza por las páginas reales.
+Por ahora hay una página de prueba: `src/App.tsx` pide iniciar sesión y, según el rol, muestra el panel (`src/Panel.tsx`: torniquetes, alertas abiertas e intentos en vivo) o el saldo del cliente. Sirve para comprobar que el proxy, la sesión, los tipos y SignalR funcionan, y se reemplaza por las páginas reales.
 
 ## Desarrollo
 
-Primero la API (desde la raíz del repo, o con Visual Studio):
+Primero la API, que necesita la base de datos en Docker (ver "Base de datos" en `server/README.md`). Desde la raíz del repo, o con Visual Studio:
 
 ```
 dotnet run --project server/TransitGate.Api
@@ -24,6 +24,12 @@ La web abre en `http://localhost:5173`. Vite reenvía a la API (`http://localhos
 ```
 API_URL=http://<IP>:5000 npm run dev
 ```
+
+## Sesión
+
+La API usa la cookie de sesión de Identity, en el mismo origen que la web, así que `fetch` y SignalR la mandan solos. Sin sesión, la API responde 401 y la web lleva al usuario a iniciar sesión; nunca hay redirecciones del servidor. Al recargar la página, `GET /api/auth/sesion` dice quién está (`rol` y `nombre`) o responde 401.
+
+Para el panel: el correo y la contraseña del operador están en los secretos de usuario de la laptop que corre la API (`Semilla:Operador:*`); pídeselos a Alex. Para el portal, registra un cliente desde la web o con `POST /api/clientes`.
 
 ## Tipos de la API
 

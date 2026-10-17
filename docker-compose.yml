@@ -1,0 +1,16 @@
+# PostgreSQL local para la API (decisión del 13 de octubre en server/CAMBIOS.md).
+# La contraseña va en .env, que git ignora; copia .env.example a .env y cámbiala.
+services:
+  db:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: transitgate
+      POSTGRES_USER: transitgate
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Falta POSTGRES_PASSWORD en .env}
+    ports:
+      - "5432:5432"
+    volumes:
+      - datos:/var/lib/postgresql/data
+    restart: unless-stopped
+volumes:
+  datos:

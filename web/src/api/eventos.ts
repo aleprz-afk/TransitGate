@@ -45,12 +45,40 @@ export interface RegistroTarjetaEvento {
   fecha: string
 }
 
+/** Una solicitud de tarjeta física nueva para la taquilla (RF-36). `cliente` va abreviado: "Luisa R.". */
+export interface SolicitudNuevaEvento {
+  solicitudId: string
+  cliente: string
+  fecha: string
+}
+
+// Grupo del cliente: solo los recibe el dueño de la tarjeta, cuando haya sesión (Identity).
+
+export interface SaldoActualizadoEvento {
+  saldo: number
+  causa: 'Paso' | 'Recarga' | 'Reversion'
+  fecha: string
+}
+
+/** Un intento con la tarjeta del cliente (RF-39 CA4). `tarifa` y `motivo` son null según el resultado. */
+export interface EventoViajeEvento {
+  intentoId: number
+  resultado: 'Exitoso' | 'Rechazado'
+  motivo: string | null
+  torniquete: string
+  tarifa: number | null
+  fecha: string
+}
+
 export interface ManejadoresEventos {
   EstadoTorniquete?: (e: EstadoTorniqueteEvento) => void
   IntentoRegistrado?: (e: IntentoRegistradoEvento) => void
   AlertaNueva?: (e: AlertaNuevaEvento) => void
   AlertaActualizada?: (e: AlertaActualizadaEvento) => void
   RegistroTarjeta?: (e: RegistroTarjetaEvento) => void
+  SolicitudNueva?: (e: SolicitudNuevaEvento) => void
+  SaldoActualizado?: (e: SaldoActualizadoEvento) => void
+  EventoViaje?: (e: EventoViajeEvento) => void
 }
 
 /** Abre la conexión al hub y registra los manejadores. Devuelve la conexión para cerrarla con stop(). */

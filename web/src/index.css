@@ -73,3 +73,29 @@ button {
   margin-top: 4px;
   cursor: pointer;
 }
+
+.formulario {
+  display: grid;
+  gap: 12px;
+  max-width: 360px;
+  margin-top: 16px;
+}
+
+.formulario label {
+  display: grid;
+  gap: 4px;
+}
+
+.formulario input {
+  font: inherit;
+  padding: 8px;
+  border: 1px solid var(--borde);
+  border-radius: 6px;
+  background: var(--fondo);
+  color: var(--texto);
+}
+
+.error {
+  color: var(--alarma);
+  margin: 0;
+}

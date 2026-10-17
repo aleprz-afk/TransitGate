@@ -39,4 +39,20 @@ public interface INotificador
     /// "Tarjeta ya registrada" (RF-10 CA1 y CA2).
     /// </summary>
     Task RegistroTarjetaAsync(string torniqueteId, Guid solicitudId, ResultadoLigar resultado, CancellationToken ct = default);
+
+    /// <summary>Una solicitud de tarjeta física nueva, para la lista de la taquilla (RF-36).</summary>
+    Task SolicitudNuevaAsync(SolicitudPendiente solicitud, CancellationToken ct = default);
+
+    /// <summary>Al cliente: su saldo cambió por un paso, una recarga o una reversión (RF-16 CA2 y CA3).</summary>
+    Task SaldoActualizadoAsync(Guid clienteId, decimal saldo, CausaSaldo causa, CancellationToken ct = default);
+
+    /// <summary>Al cliente: un intento con su tarjeta, para el historial en vivo (RF-39 CA4).</summary>
+    Task EventoViajeAsync(Guid clienteId, IntentoAcceso intento, string torniqueteNombre, CancellationToken ct = default);
+}
+
+public enum CausaSaldo
+{
+    Paso,
+    Recarga,
+    Reversion,
 }

@@ -318,7 +318,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Estado y conexión de los torniquetes (RF-31, RF-37). Sin sesión hasta que exista Identity */
+        /** Estado y conexión de los torniquetes (RF-31, RF-37) */
         get: {
             parameters: {
                 query?: never;
@@ -354,7 +354,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Últimos 100 intentos de acceso, sin filtros todavía (RF-32). Sin sesión hasta que exista Identity */
+        /** Últimos 100 intentos de acceso, sin filtros todavía (RF-32) */
         get: {
             parameters: {
                 query?: never;
@@ -401,7 +401,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Alertas de colado, opcionalmente por estado: ?estado=Abierta (RF-33). Sin sesión hasta que exista Identity */
+        /** Alertas de colado, opcionalmente por estado: ?estado=Abierta (RF-33) */
         get: {
             parameters: {
                 query?: {
@@ -450,7 +450,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Apaga la alarma y deja la alerta Atendida (RF-34). Sin sesión hasta que exista Identity */
+        /** Apaga la alarma y deja la alerta Atendida (RF-34) */
         post: {
             parameters: {
                 query?: never;
@@ -493,7 +493,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Solicitudes de tarjeta física pendientes, la más antigua primero; ?documento= para buscar una (RF-36). Sin sesión hasta que exista Identity */
+        /** Solicitudes de tarjeta física pendientes, la más antigua primero; ?documento= para buscar una (RF-36) */
         get: {
             parameters: {
                 query?: {
@@ -543,7 +543,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Pone el lector en modo registro para entregar la tarjeta de una solicitud (RF-09, S6). Sin sesión hasta que exista Identity */
+        /** Pone el lector en modo registro para entregar la tarjeta de una solicitud (RF-09, S6) */
         post: {
             parameters: {
                 query?: never;
@@ -603,6 +603,645 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Inicia sesión con correo y contraseña (RF-02); 6 intentos fallidos bloquean 5 min (RNF-22) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SolicitudLogin"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RespuestaSesion"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Cierra la sesión (RF-03) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description No Content */
+                204: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/auth/sesion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Rol y nombre de la sesión actual, para que la web sepa a dónde llevar al usuario al recargar */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RespuestaSesion"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/clientes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Registro del cliente: crea su tarjeta con saldo 0 e inicia sesión (RF-01, RF-07) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SolicitudRegistro"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RespuestaRegistro"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/clientes/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Datos del cliente de la sesión */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["PerfilCliente"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /** Cambia el teléfono (RF-05) */
+        patch: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["CambioPerfil"];
+                };
+            };
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content?: never;
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+            };
+        };
+        trace?: never;
+    };
+    "/api/tarjetas/mi-tarjeta": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Saldo y estado del soporte (RF-16) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["MiTarjetaJson"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tarjetas/mi-tarjeta/solicitud-fisica": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Pide la tarjeta física (RF-08) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RespuestaSolicitudFisica"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tarjetas/mi-tarjeta/confirmar-recepcion": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirma que recibió la tarjeta física: Entregada → Activa (RF-11) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RespuestaEstadoTarjeta"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tarjetas/mi-tarjeta/recargas": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Historial de recargas (RF-17) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RecargaJson"][];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        /** Recarga con pago simulado; Idempotency-Key evita el doble cobro (RF-15) */
+        post: {
+            parameters: {
+                query?: never;
+                header?: {
+                    "Idempotency-Key"?: string;
+                };
+                path?: never;
+                cookie?: never;
+            };
+            requestBody: {
+                content: {
+                    "application/json": components["schemas"]["SolicitudRecarga"];
+                };
+            };
+            responses: {
+                /** @description Created */
+                201: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["RecargaJson"];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+            };
+        };
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/tarjetas/mi-tarjeta/viajes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Historial de viajes, últimos 100 (RF-39) */
+        get: {
+            parameters: {
+                query?: never;
+                header?: never;
+                path?: never;
+                cookie?: never;
+            };
+            requestBody?: never;
+            responses: {
+                /** @description OK */
+                200: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ViajeJson"][];
+                    };
+                };
+                /** @description Bad Request */
+                400: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+                /** @description Not Found */
+                404: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+                /** @description Conflict */
+                409: {
+                    headers: {
+                        [name: string]: unknown;
+                    };
+                    content: {
+                        "application/json": components["schemas"]["ErrorApi"];
+                    };
+                };
+            };
+        };
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -613,6 +1252,9 @@ export interface components {
             estado: string;
             /** Format: date-time */
             fecha: string;
+        };
+        CambioPerfil: {
+            telefono: null | string;
         };
         DesafioLatido: {
             desafioId: string;
@@ -632,11 +1274,38 @@ export interface components {
             /** Format: date-time */
             fecha: string;
         };
+        MiTarjetaJson: {
+            tarjetaId: string;
+            /** Format: int32 */
+            saldo: number;
+            soporte: null | components["schemas"]["SoporteJson"];
+        };
+        PerfilCliente: {
+            clienteId: string;
+            nombreCompleto: string;
+            correo: string;
+            telefono: string;
+            tipoDocumento: string;
+            numeroDocumento: string;
+        };
+        RecargaJson: {
+            recargaId: string;
+            /** Format: int32 */
+            monto: number;
+            aprobada: boolean;
+            /** Format: int32 */
+            saldoNuevo: number;
+            /** Format: date-time */
+            fecha: string;
+        };
         RespuestaCruce: {
             resultado: string;
             /** Format: int64 */
             pasoId?: null | number;
             alertaId?: null | string;
+        };
+        RespuestaEstadoTarjeta: {
+            estado: string;
         };
         RespuestaLatido: {
             brazoDeseado: string;
@@ -658,6 +1327,18 @@ export interface components {
         RespuestaModoRegistro: {
             /** Format: int32 */
             expiraEn: number;
+        };
+        RespuestaRegistro: {
+            clienteId: string;
+            tarjetaId: string;
+        };
+        RespuestaSesion: {
+            rol: string;
+            nombre: string;
+        };
+        RespuestaSolicitudFisica: {
+            solicitudId: string;
+            estado: string;
         };
         SolicitudCruce: {
             /** Format: int64 */
@@ -685,8 +1366,27 @@ export interface components {
             tipo: null | string;
             valor: null | string;
         };
+        SolicitudLogin: {
+            correo: null | string;
+            password: null | string;
+        };
         SolicitudModoRegistro: {
             solicitudId: null | string;
+        };
+        SolicitudRecarga: {
+            /** Format: int32 */
+            monto: null | number;
+            /** @default false */
+            simularRechazo: boolean;
+        };
+        SolicitudRegistro: {
+            nombreCompleto: null | string;
+            tipoDocumento: null | string;
+            numeroDocumento: null | string;
+            correo: null | string;
+            telefono: null | string;
+            password: null | string;
+            autorizaTratamientoDatos: boolean;
         };
         SolicitudResumen: {
             solicitudId: string;
@@ -696,6 +1396,10 @@ export interface components {
             /** Format: date-time */
             fecha: string;
         };
+        SoporteJson: {
+            tipo: string;
+            estado: string;
+        };
         TorniqueteResumen: {
             id: string;
             nombre: string;
@@ -703,6 +1407,19 @@ export interface components {
             conectado: boolean;
             /** Format: date-time */
             ultimaSenal: null | string;
+        };
+        ViajeJson: {
+            /** Format: int64 */
+            intentoId: number;
+            resultado: string;
+            motivo: null | string;
+            torniqueteNombre: string;
+            /** Format: int32 */
+            tarifa: null | number;
+            /** Format: int32 */
+            saldoRestante: null | number;
+            /** Format: date-time */
+            fecha: string;
         };
     };
     responses: never;

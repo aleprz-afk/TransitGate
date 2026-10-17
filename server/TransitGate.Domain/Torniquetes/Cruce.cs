@@ -29,6 +29,13 @@ public class Cruce
         AlertaId = alertaId;
     }
 
+    // Para EF Core: el constructor público recibe un ResultadoCruce, que no es una columna.
+    private Cruce()
+    {
+        TorniqueteId = null!;
+        SesionVision = null!;
+    }
+
     public long Id { get; private set; }
 
     public string TorniqueteId { get; private set; }
