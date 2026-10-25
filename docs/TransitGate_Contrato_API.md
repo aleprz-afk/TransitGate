@@ -1,8 +1,10 @@
-# TransitGate — Contrato de la API (v1.4)
+# TransitGate — Contrato de la API (v1.5)
 
 Rutas y formato JSON entre el ESP32 principal, el servicio de visión, la web/app y el servidor. Completa el pendiente de [`TransitGate_Arquitectura_del_sistema_v2.md`](./TransitGate_Arquitectura_del_sistema_v2.md) sección 9. Cubre los 46 RF de `Requisitos funcionales (v2)` y usa sus supuestos (S1–S15).
 
 El detalle de las interfaces que no son HTTP (APDU entre la app y el lector, stream de la cámara, pines, `config.json` y simuladores) está en [`TransitGate_Contratos_de_integracion.md`](./TransitGate_Contratos_de_integracion.md).
+
+**Cambios en v1.5 (25 oct 2026)** (instante del cruce): `horaFotograma` es el instante en que la persona tocó la línea, interpolado entre las llegadas de las dos fotos en que cruzó (sección 7). El formato, las rutas y las respuestas no cambian.
 
 **Cambios en v1.4 (16 oct 2026)** (sesión, clientes, tarjetas y saldo con base de datos):
 - Sin sesión la API responde 401 `SesionRequerida` y sin permiso 403 `SinPermiso` (sección 1). `POST /api/auth/login` agrega 400 `LoginIncompleto` y 401 `LoginBloqueado`; se agrega `GET /api/auth/sesion` (sección 2).
@@ -312,7 +314,7 @@ POST /api/torniquetes/{id}/cruces
   "trackId": 4812,                                  // id de seguimiento (ByteTrack); se reinicia con el servicio
   "sesionVision": "v-20261001-1",                   // cambia en cada arranque del servicio
   "sentido": "entrada",                              // "entrada" | "salida"
-  "horaFotograma": "2026-09-27T20:30:01.450Z"        // llegada del fotograma al servicio de visión (S13)
+  "horaFotograma": "2026-09-27T20:30:01.450Z"        // toque de la línea, entre las llegadas de dos fotogramas (S13)
 }
 
 → 200 { "resultado": "consumido", "pasoId": 123 }  (había un PasoAutorizado Pendiente, RF-27)

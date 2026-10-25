@@ -1,6 +1,8 @@
-# TransitGate — Contratos de integración (v1.9)
+# TransitGate — Contratos de integración (v1.10)
 
 El [`TransitGate_Contrato_API.md`](./TransitGate_Contrato_API.md) define las rutas HTTP del servidor. Este documento define todo lo demás que dos integrantes distintos deben construir de forma compatible: el protocolo NFC entre la app y el lector, el stream de la cámara, los pines del hardware, los archivos de configuración, los eventos en tiempo real, el contrato interno entre los dos módulos del servidor y los simuladores. Si un integrante cambia algo de aquí sin avisar, se rompe el trabajo de otro.
+
+**Cambios en v1.10 (25 oct 2026):** sección 5 — la hora del cruce es el instante interpolado en que el centro de la persona tocó la línea, no la hora de la foto que confirma el cruce al salir de la franja, que llega unas fotos después.
 
 **Cambios en v1.9 (25 oct 2026):** sección 4.1 — el `config.yaml` de la visión agrega `imgsz` (entrada de YOLO, 320 sin GPU) y `margen_linea` (franja a cada lado de la línea donde no se cuentan cruces, para que el temblor del recuadro no cuente dobles). Se aclara de qué lado de la línea es cada sentido.
 
@@ -159,7 +161,7 @@ Las rutas están en el Contrato API §7.
 
 | Regla | Valor |
 | --- | --- |
-| Hora del cruce | `horaFotograma` = hora en que el fotograma llegó al servicio de visión, en el reloj de la laptop (mismo reloj que la API) (S13) |
+| Hora del cruce | `horaFotograma` = instante en que el centro de la persona tocó la línea, interpolado linealmente entre las horas de llegada al servicio de las dos fotos en que cambió de lado, en el reloj de la laptop (mismo reloj que la API) (S13). No es la hora de la foto que confirma el cruce: esa llega cuando la persona sale de la franja, unas fotos después |
 | Idempotencia | `sesionVision` + `trackId`; un mismo ID que cruza dos veces se reporta una vez (RF-26 CA3) |
 | Reintento | Hasta 3 veces con el mismo cuerpo si la API no responde en 1 s |
 | Latido | Cada 5 s; la API la marca fuera de línea tras 15 s (S14) |
