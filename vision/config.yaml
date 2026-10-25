@@ -1,0 +1,15 @@
+# Configuración del servicio de visión (Contratos de integración §4.1).
+# Los valores son los de la red de la demo; para probar en otra red usa --api y --stream.
+api_url: "http://192.168.137.10:5000"
+torniquete_id: "tq_1"
+device_key_env: "TG_VISION_KEY"     # la clave va en variable de entorno, no aquí (RNF-25)
+stream_url: "http://192.168.137.21:81/stream"
+modelo: "yolov8n.pt"                # preentrenado, clase person
+confianza_min: 0.5
+imgsz: 320                          # entrada de YOLO; 320 sin GPU (RNF-10)
+linea:                              # coordenadas normalizadas 0..1 sobre el fotograma
+  p1: [0.0, 0.5]
+  p2: [1.0, 0.5]
+margen_linea: 0.05                  # franja a cada lado de la línea donde no se cuenta nada
+sentido_entrada: "arriba_a_abajo"
+latido_seg: 5

@@ -1,6 +1,8 @@
-# TransitGate — Contratos de integración (v1.8)
+# TransitGate — Contratos de integración (v1.9)
 
 El [`TransitGate_Contrato_API.md`](./TransitGate_Contrato_API.md) define las rutas HTTP del servidor. Este documento define todo lo demás que dos integrantes distintos deben construir de forma compatible: el protocolo NFC entre la app y el lector, el stream de la cámara, los pines del hardware, los archivos de configuración, los eventos en tiempo real, el contrato interno entre los dos módulos del servidor y los simuladores. Si un integrante cambia algo de aquí sin avisar, se rompe el trabajo de otro.
+
+**Cambios en v1.9 (25 oct 2026):** sección 4.1 — el `config.yaml` de la visión agrega `imgsz` (entrada de YOLO, 320 sin GPU) y `margen_linea` (franja a cada lado de la línea donde no se cuentan cruces, para que el temblor del recuadro no cuente dobles). Se aclara de qué lado de la línea es cada sentido.
 
 **Cambios en v1.8 (17 oct 2026):** sección 9 — el `config.json` del firmware agrega `lector` (`"simulado"` o `"pn532"`) y `uidsPrueba`, las tarjetas que "acerca" el lector simulado mientras no está el PN532.
 
@@ -138,12 +140,16 @@ device_key_env: "TG_VISION_KEY"     # la clave va en variable de entorno, no aqu
 stream_url: "http://192.168.137.21:81/stream"
 modelo: "yolov8n.pt"                # preentrenado, clase person
 confianza_min: 0.5
+imgsz: 320                          # entrada de YOLO; 320 sin GPU, 416 con GPU (RNF-10)
 linea:                              # coordenadas normalizadas 0..1 sobre el fotograma
   p1: [0.0, 0.5]
   p2: [1.0, 0.5]
-sentido_entrada: "arriba_a_abajo"
+margen_linea: 0.05                  # franja a cada lado de la línea donde no se cuenta nada
+sentido_entrada: "arriba_a_abajo"   # o "abajo_a_arriba"
 latido_seg: 5
 ```
+
+Un cruce es pasar el centro del recuadro de un lado de la línea al otro atravesando la franja completa; dentro de la franja no cambia nada. Con `"arriba_a_abajo"`, la entrada va hacia el lado derecho de la línea al recorrerla de `p1` a `p2` (con la línea horizontal por defecto, hacia abajo). Cada `trackId` se reporta una sola vez (RF-26 CA3).
 
 ---
 
