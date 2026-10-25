@@ -8,14 +8,15 @@ Lee el MJPEG del ESP32-CAM (C3), detecta personas con YOLO preentrenado (clase `
 
 | Parte | Estado |
 | --- | --- |
-| Detección y tracking | Probado sobre el stream real: 17 FPS procesados con YOLO nano a 320 px en el CPU (Ryzen 5 9600X; RNF-10 pide 10). El límite lo pone la cámara, no el modelo |
+| Detección y tracking | Probado sobre el stream real: ~25 FPS procesados con YOLO nano a 320 px en el CPU (Ryzen 5 9600X; RNF-10 pide 10), 8 ms por cuadro. El límite lo pone la cámara, no el modelo |
 | Conteo con franja (`conteo.py`) | Hecho, con pruebas. Falta medirlo con personas en vista cenital (RNF-07 a RNF-09) |
 | Cliente de la API (`api.py`) | Probado contra la API en modo estricto: `consumido` (con `sim-esp32`), `fraude`, `registrado`, `duplicado`, 401 con clave mala y latido |
 | Entrenamiento propio | No hace falta por ahora: se usa el preentrenado (Arquitectura, "YOLO preentrenado primero"). Solo si la prueba cenital no llega a las metas (RNF §10.3) |
 
 ## Archivos
 
-- `servicio.py`: el servicio. Lector del stream en un hilo (siempre trabaja sobre el último cuadro), YOLO + ByteTrack, conteo y reporte.
+- `servicio.py`: el servicio. YOLO + ByteTrack sobre el último cuadro, conteo y reporte. Con `--ver`, si la cámara deja de mandar cuadros la ventana muestra "SIN SENAL" en vez de congelarse.
+- `stream.py`: lee el MJPEG con un socket propio, en un hilo, y se queda solo con el último cuadro. No usa `cv2.VideoCapture`: su lector HTTP se atascaba con la ESP32 (huecos de más de 1 s y caídas a 2 FPS que la cámara no tenía) y al cortarse podía bloquearse ~30 s. Sin datos en 3 s, reconecta.
 - `conteo.py`: el conteo de cruces sin cámara ni red. Cada persona tiene un lado confirmado de la línea; alrededor de la línea hay una franja (`margen_linea`) donde no cambia nada, así que el temblor del recuadro encima de la línea no cuenta dobles. Cada `trackId` se reporta una sola vez (RF-26 CA3).
 - `api.py`: cruces y latido. Los cruces salen por una cola en otro hilo, con plazo de 1 s y hasta 3 reintentos con el mismo cuerpo (C4). Anota el retraso de cada cruce en `cruces.csv` para RNF-06.
 - `config.yaml`: configuración de C3 §4.1, con los valores de la red de la demo.

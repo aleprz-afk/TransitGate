@@ -1,6 +1,6 @@
 # Cambios del servidor
 
-Responsable: Alex · Última actualización: 25 de octubre de 2026 · Todo está en `main` hasta el PR #19; en curso: `feat/vision-prueba-yolo`. Los contratos están en `docs/`: Contrato de la API v1.4 y Contratos de integración v1.9
+Responsable: Alex · Última actualización: 25 de octubre de 2026 · Todo está en `main` hasta el PR #20; en curso: `fix/vision-lector-stream`. Los contratos están en `docs/`: Contrato de la API v1.4 y Contratos de integración v1.9
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -23,7 +23,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - **Firmware del ESP32-CAM** (`firmware/esp32-cam/`, Arduino): transmite MJPEG en `http://<ip>:81/stream` (C3). Probado en la placa por WiFi: OV3660, VGA, 24,6 FPS.
 - **`sim-esp32`** (`tools/sim-esp32/`): simula la placa en el PC con el mismo código del firmware. Con la web y la API alcanza para demostrar el H2 sin hardware.
 - **Servicio de visión** (`vision/`, Python + YOLO + ByteTrack): detecta personas en el stream de la CAM, cuenta los cruces de la línea virtual y los reporta a la API con su latido (C4). Probado contra la API real; falta la prueba con personas en vista cenital.
-- Hay 188 pruebas automatizadas: 153 del servidor (dominio, casos de uso y 16 de integración contra un PostgreSQL de verdad), 12 del firmware y 23 de la visión.
+- Hay 192 pruebas automatizadas: 153 del servidor (dominio, casos de uso y 16 de integración contra un PostgreSQL de verdad), 12 del firmware y 27 de la visión.
 
 ## Decisiones
 
@@ -289,6 +289,7 @@ Lo que sigue, en orden (17 de octubre). Lo pendiente de cada integrante está en
 - Firmware del ESP32-CAM en Arduino (`firmware/esp32-cam/camara/`), basado en CameraWebServer: página, `/capture` y MJPEG en `:81/stream` (C3), con FPS y RSSI en el puerto serie. Probado en la placa (OV3660, PSRAM de 4 MB) por WiFi de 2,4 GHz: 24,6 FPS en VGA con calidad 12.
 - Servicio de visión en `vision/` (C4): YOLO nano preentrenado a 320 px con ByteTrack, conteo de cruces con una franja alrededor de la línea (el temblor del recuadro sobre la línea contaba entrada y salida a la vez) y un reporte por `trackId`. Cruces por una cola con plazo de 1 s y 3 reintentos, latido cada 5 s y retrasos en `cruces.csv` (RNF-06). 17 FPS procesados en el CPU. Probado contra la API en modo estricto: `consumido` con `sim-esp32`, `fraude`, `registrado`, `duplicado` y 401. 23 pruebas.
 - Contratos de integración v1.9: `imgsz` y `margen_linea` en el `config.yaml` de la visión.
+- Visión: el stream se lee con un lector propio (`vision/stream.py`) en vez de `cv2.VideoCapture`, que se atascaba con la ESP32 (huecos de hasta 1,2 s y caídas a 2 FPS que la cámara no tenía). En 60 s: de 8 esperas de más de 300 ms a ninguna, ~25 FPS procesados. La ventana de `--ver` ya no se congela sin señal y el modelo se calienta antes de conectar. 4 pruebas nuevas.
 
 **17 de octubre (semana 2)**
 - Firmware del ESP32 principal en MicroPython (`firmware/esp32-main/`): reglas de C1 con pruebas, cliente HTTP con timeouts, WiFi, servo, sirena, LED de estado y lector simulado. Probado en la placa sin red y, desde el PC, contra la API.
