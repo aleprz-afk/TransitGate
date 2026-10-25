@@ -1,6 +1,6 @@
 # Cambios del servidor
 
-Responsable: Alex · Última actualización: 17 de octubre de 2026 · Todo está en `main` hasta el PR #17; no hay ramas en curso. Los contratos están en `docs/`: Contrato de la API v1.4 y Contratos de integración v1.8
+Responsable: Alex · Última actualización: 25 de octubre de 2026 · Todo está en `main` hasta el PR #18; en curso: `feat/esp32-cam-stream`. Los contratos están en `docs/`: Contrato de la API v1.4 y Contratos de integración v1.8
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -20,6 +20,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - **Web completa para el MVP:** portal del cliente (registro, mi tarjeta, recargar, viajes, recargas, perfil) y panel del personal (panel en vivo y taquilla), servidos por la API en `http://<IP>:5000/`. Pensada para el celular.
 - Los números del JSON se reciben solo como números: `"pasoIdAbierto": "5"` (entre comillas) responde 400.
 - **Firmware del ESP32 principal** (`firmware/esp32-main/`, MicroPython): reglas de C1, cliente HTTP con timeouts, WiFi, servo, sirena, LED y un lector simulado; cargado en una ESP32 real. Falta el lector PN532.
+- **Firmware del ESP32-CAM** (`firmware/esp32-cam/`, Arduino): transmite MJPEG en `http://<ip>:81/stream` (C3). Probado en la placa por WiFi: OV3660, VGA, 24,6 FPS.
 - **`sim-esp32`** (`tools/sim-esp32/`): simula la placa en el PC con el mismo código del firmware. Con la web y la API alcanza para demostrar el H2 sin hardware.
 - Hay 165 pruebas automatizadas: 153 del servidor (dominio, casos de uso y 16 de integración contra un PostgreSQL de verdad) y 12 del firmware.
 
@@ -113,6 +114,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
   - Un cruce de entrada consume el paso si su fotograma cae dentro de los 10 s de la ventana. Sin paso disponible, responde `fraude` con un `alertaId`.
 - **Latido** `POST /api/torniquetes/tq_1/vision/latido` cada 5 s, con `fps` y `sesionVision`. Tras 15 s sin señal, el panel muestra la visión **fuera de línea**.
 - **Credencial:** envía la cabecera `X-Device-Key` con la clave de la visión en los cruces y en los latidos; según `vision/config.yaml`, va en la variable de entorno `TG_VISION_KEY`. Es distinta de la del ESP32: la del ESP32 no sirve en las rutas de la visión, ni al revés. Mismo calendario que para Karol: tolerante hasta después del H1.
+- **Cámara (C3):** el firmware ya está en `firmware/esp32-cam/` y transmite MJPEG en `http://<ip>:81/stream`, VGA 640×480 con calidad 12. Medido desde el PC: 24,6 FPS, ~12 KB por cuadro. `http://<ip>/` muestra el video para ajustar el encuadre y `http://<ip>/capture` da un JPEG suelto. Para leerlo con OpenCV basta `cv2.VideoCapture("http://<ip>:81/stream")`. La orientación (`VOLTEAR_VERTICAL`, `ESPEJO_HORIZONTAL`) se ajusta en `config.h` al montarla.
 - **RNF-06:** cada cruce deja en el log de la API una línea `RNF-06` con la hora del fotograma, la hora de llegada y el retraso en milisegundos.
 
 ### Ana — web (interfaz C6)
@@ -261,7 +263,7 @@ Lo que sigue, en orden (17 de octubre). Lo pendiente de cada integrante está en
 2. **Lector PN532** en el firmware (`lector_pn532.py`, I2C en GPIO 21 y 22, dirección `0x24`), con la misma interfaz que `lector_simulado.py`: `leer()` devuelve el UID o `None`.
 3. **ESP32 con WiFi** de 2,4 GHz contra la API: llenar `config.json` (red, IP de la laptop, `deviceKey`) y comprobar en el panel que aparece "ESP32 en línea".
 4. **Servo y sirena** conectados a la placa y calibrados (C8).
-5. **Visión (Wili):** estado de la ESP32-CAM y de YOLO; la prueba del ángulo de la cámara es el riesgo técnico más grande (MVP §8).
+5. **Visión:** la ESP32-CAM ya transmite (25 de octubre). Sigue el servicio en Python con YOLO sobre ese stream y la prueba del ángulo cenital, que es el riesgo técnico más grande (MVP §8).
 6. **Servidor:** modo estricto de `X-Device-Key`, medición de RNF-03, registrar quién apagó la alarma y, en la semana 6, RF-46.
 
 ## Limitaciones actuales
@@ -280,6 +282,9 @@ Lo que sigue, en orden (17 de octubre). Lo pendiente de cada integrante está en
 | El firmware usa un lector simulado | Con el PN532 (18 de octubre) |
 
 ## Historial
+
+**25 de octubre (semana 3)**
+- Firmware del ESP32-CAM en Arduino (`firmware/esp32-cam/camara/`), basado en CameraWebServer: página, `/capture` y MJPEG en `:81/stream` (C3), con FPS y RSSI en el puerto serie. Probado en la placa (OV3660, PSRAM de 4 MB) por WiFi de 2,4 GHz: 24,6 FPS en VGA con calidad 12.
 
 **17 de octubre (semana 2)**
 - Firmware del ESP32 principal en MicroPython (`firmware/esp32-main/`): reglas de C1 con pruebas, cliente HTTP con timeouts, WiFi, servo, sirena, LED de estado y lector simulado. Probado en la placa sin red y, desde el PC, contra la API.
