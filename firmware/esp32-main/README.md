@@ -12,7 +12,8 @@ Lee la tarjeta, la reporta a la API, manda un latido cada 300 ms y aplica lo que
 | Cliente HTTP con timeout (`api.py`) | Probado desde el PC contra la API real; en la placa falta probarlo con WiFi |
 | WiFi (`red.py`) | Escrito; falta probarlo con la red de 2,4 GHz |
 | Servo, sirena y LED (`actuadores.py`) | El PWM del servo y la sirena arrancan bien en la placa; faltan conectarlos y probarlos |
-| Lector | Simulado (`lector_simulado.py`); `lector_pn532.py` llega con el PN532 |
+| Lector PN532 (`lector_pn532.py`) | Probado con el módulo Elechouse V3 real: lee tarjetas. 17 pruebas en el PC contra un PN532 simulado |
+| Lector simulado (`lector_simulado.py`) | Para probar sin el PN532 (`"lector": "simulado"`) |
 
 ## Archivos
 
@@ -21,7 +22,8 @@ Lee la tarjeta, la reporta a la API, manda un latido cada 300 ms y aplica lo que
 - `api.py`: cliente HTTP con sockets y un plazo por petición: 250 ms el latido y 3 s la lectura. `urequests` no tiene timeout y bloquearía el lector (nota de RNF-01).
 - `red.py`: conecta y reconecta el WiFi en segundo plano.
 - `actuadores.py`: servo (PWM 50 Hz en GPIO 13), sirena (GPIO 26, por transistor o relé) y LED de la placa (GPIO 2: parpadea sin conexión, fijo en modo registro).
-- `lector_simulado.py`: mientras no está el PN532. El botón BOOT "acerca" la siguiente tarjeta de `uidsPrueba`, o se escribe un UID y Enter por el puerto serie.
+- `lector_pn532.py`: el PN532 por I2C (SDA en GPIO 21, SCL en GPIO 22, dirección `0x24`; interruptores del módulo en I2C). Se usa con `"lector": "pn532"` en `config.json`. `leer()` no bloquea: manda la búsqueda de tarjeta y en cada vuelta solo pregunta si el PN532 ya respondió. Si el lector no aparece o se desconecta, el resto del firmware sigue y lo vuelve a iniciar cada 2 s (`[lector] PN532 …` en el log).
+- `lector_simulado.py`: para probar sin el PN532. El botón BOOT "acerca" la siguiente tarjeta de `uidsPrueba`, o se escribe un UID y Enter por el puerto serie.
 - `config.example.json`: copia como `config.json` y llénalo (red, IP de la laptop, clave del dispositivo). `config.json` no se sube al repositorio (RNF-25).
 - `pruebas/`: pruebas del controlador en el PC.
 
@@ -42,7 +44,7 @@ python -m esptool --port COM5 --baud 460800 write-flash --erase-all -z 0x1000 ES
 **Subir el firmware** (desde esta carpeta; `mpremote` reinicia la placa al abrir el puerto, por eso el `sleep 3`):
 
 ```
-python -m mpremote connect COM5 sleep 3 cp actuadores.py api.py config.example.json controlador.py lector_simulado.py main.py red.py reloj.py :
+python -m mpremote connect COM5 sleep 3 cp actuadores.py api.py config.example.json controlador.py lector_pn532.py lector_simulado.py main.py red.py reloj.py :
 python -m mpremote connect COM5 sleep 3 cp config.json :
 ```
 
