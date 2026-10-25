@@ -1,6 +1,6 @@
 # Cambios del servidor
 
-Responsable: Alex · Última actualización: 17 de octubre de 2026 · Todo está en `main` hasta el PR #17; no hay ramas en curso. Los contratos están en `docs/`: Contrato de la API v1.4 y Contratos de integración v1.8
+Responsable: Alex · Última actualización: 25 de octubre de 2026 · Todo está en `main` hasta el PR #17; no hay ramas en curso. Los contratos están en `docs/`: Contrato de la API v1.4 y Contratos de integración v1.8
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -19,9 +19,9 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - El ESP32 y la visión se identifican con la cabecera `X-Device-Key`. Por ahora en **modo tolerante**: no se rechaza nada, solo queda en el log.
 - **Web completa para el MVP:** portal del cliente (registro, mi tarjeta, recargar, viajes, recargas, perfil) y panel del personal (panel en vivo y taquilla), servidos por la API en `http://<IP>:5000/`. Pensada para el celular.
 - Los números del JSON se reciben solo como números: `"pasoIdAbierto": "5"` (entre comillas) responde 400.
-- **Firmware del ESP32 principal** (`firmware/esp32-main/`, MicroPython): reglas de C1, cliente HTTP con timeouts, WiFi, servo, sirena, LED y un lector simulado; cargado en una ESP32 real. Falta el lector PN532.
+- **Firmware del ESP32 principal** (`firmware/esp32-main/`, MicroPython): reglas de C1, cliente HTTP con timeouts, WiFi, servo, sirena, LED, el lector PN532 (ya probado con el módulo real) y uno simulado; cargado en una ESP32 real.
 - **`sim-esp32`** (`tools/sim-esp32/`): simula la placa en el PC con el mismo código del firmware. Con la web y la API alcanza para demostrar el H2 sin hardware.
-- Hay 165 pruebas automatizadas: 153 del servidor (dominio, casos de uso y 16 de integración contra un PostgreSQL de verdad) y 12 del firmware.
+- Hay 182 pruebas automatizadas: 153 del servidor (dominio, casos de uso y 16 de integración contra un PostgreSQL de verdad) y 29 del firmware.
 
 ## Decisiones
 
@@ -69,7 +69,8 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 
 - **Firmware empezado en `firmware/esp32-main/` (17 de octubre):** lo armé con la ESP32 que tengo, ya con MicroPython 1.29, para no llegar al H2 sin nada. Tiene las reglas de C1 en `controlador.py` (con 12 pruebas en el PC), el cliente HTTP con timeouts (`api.py`, ya probado contra la API), el WiFi, el servo, la sirena, el LED de estado y un lector simulado mientras llega el PN532. Cómo cargarlo y probarlo está en `firmware/esp32-main/README.md`. Tómalo como base: revisa el PR y cambia lo que quieras, sigue siendo tuyo.
 - **`sim-esp32` listo (`tools/sim-esp32/`):** corre en el PC con los comandos de C11 (`tarjeta`, `celular`, `reiniciar`, `cortar-red`, `no-confirmar`) y reusa `controlador.py` y `api.py` del firmware, así que se comporta igual que la placa. Ya no hace falta la placa para el H2 ni para que Ana y Wili prueben.
-- **Lo que falta y es tuyo:** `lector_pn532.py` (con la misma interfaz que el simulado: `leer()` devuelve el UID en hex mayúsculas o `None`), conectar y calibrar el servo y la sirena (los pulsos de 0,5 y 1,5 ms son un punto de partida), y probarlo todo con la red de la demo. Si tienes código del PN532 o del servo, súbelo y lo juntamos.
+- **`lector_pn532.py` escrito (25 de octubre):** I2C en GPIO 21 y 22, dirección `0x24`, misma interfaz que el simulado (`leer()` devuelve el UID en hex mayúsculas o `None`) y sin bloquear el latido. Tiene 17 pruebas en el PC contra un PN532 simulado y ya lee tarjetas con el módulo real (Elechouse V3). Se activa con `"lector": "pn532"` en `config.json`.
+- **Lo que falta y es tuyo:** probar el PN532 con tarjetas reales y pasar sus UID para agregarlos, conectar y calibrar el servo y la sirena (los pulsos de 0,5 y 1,5 ms son un punto de partida), y probarlo todo con la red de la demo. Si tienes código del PN532 o del servo, súbelo y lo juntamos.
 - **`config.json` (contratos v1.8):** agrega `lector` (`"pn532"` o `"simulado"`) y `uidsPrueba`. Copia `config.example.json` como `config.json`; ese archivo no se sube porque lleva la clave del WiFi.
 
 - **Dirección:** `http://<IP de la laptop>:5000`. La primera vez que se corre la API, Windows pregunta por el firewall: hay que permitirla en red **Privada**.
@@ -258,7 +259,7 @@ dotnet run --project TransitGate.Api | Tee-Object -FilePath mediciones.log
 Lo que sigue, en orden (17 de octubre). Lo pendiente de cada integrante está en su sección de "Qué necesita saber cada uno".
 
 1. **`sim-vision`** (`tools/sim-vision/`, C11): latido cada 5 s y comandos `entrada`, `salida`, `colado`, `retraso <ms>` y `silencio <s>`. Con él y `sim-esp32` se hace el guion completo sin hardware (RNF-38). Es de Wili; si no llega pronto, lo hace Alex con el mismo enfoque que `sim-esp32`.
-2. **Lector PN532** en el firmware (`lector_pn532.py`, I2C en GPIO 21 y 22, dirección `0x24`), con la misma interfaz que `lector_simulado.py`: `leer()` devuelve el UID o `None`.
+2. **UID de las tarjetas reales:** el PN532 ya lee tarjetas (25 de octubre); falta pasarle a Alex sus UID para registrarlas y soldar los pines del módulo antes de la demo.
 3. **ESP32 con WiFi** de 2,4 GHz contra la API: llenar `config.json` (red, IP de la laptop, `deviceKey`) y comprobar en el panel que aparece "ESP32 en línea".
 4. **Servo y sirena** conectados a la placa y calibrados (C8).
 5. **Visión (Wili):** estado de la ESP32-CAM y de YOLO; la prueba del ángulo de la cámara es el riesgo técnico más grande (MVP §8).
@@ -277,9 +278,13 @@ Lo que sigue, en orden (17 de octubre). Lo pendiente de cada integrante está en
 | En la práctica hay un solo rol de personal: el Operador puede todo lo del panel (MVP §3.1), así que RF-06 CA3 (taquilla sin apagar alarmas) todavía no aplica | Entrega final |
 | No hay recuperación de contraseña (RF-04) ni administración de operadores (RF-42) | Después del MVP (Should) |
 | No hay visión ni `sim-vision`: sin ellos no hay cruces, así que el paso solo se cierra por vencimiento y no se puede demostrar el colado (paso 8) | `sim-vision` en la semana 3; la visión real, Wili |
-| El firmware usa un lector simulado | Con el PN532 (18 de octubre) |
+| Los pines del PN532 no están soldados: el contacto puede fallar | Antes del H2 (Karol) |
 
 ## Historial
+
+**25 de octubre (semana 3)**
+- Lector PN532 por I2C en el firmware (`lector_pn532.py`), sin bloquear el bucle principal y con reintento si el lector falla. Probado con el módulo real; 17 pruebas en el PC contra un PN532 simulado.
+- Hallazgos con el módulo real: mientras procesa una orden no contesta a su dirección (`ENODEV`), a veces entrega la respuesta sin mostrar antes el ACK, y el jumper de 3,3 V de la placa de expansión tiene que estar puesto para que el módulo encienda.
 
 **17 de octubre (semana 2)**
 - Firmware del ESP32 principal en MicroPython (`firmware/esp32-main/`): reglas de C1 con pruebas, cliente HTTP con timeouts, WiFi, servo, sirena, LED de estado y lector simulado. Probado en la placa sin red y, desde el PC, contra la API.
