@@ -135,15 +135,17 @@ def main():
                     cajas.append((caja, tid))
                     x = (caja[0] + caja[2]) / 2 / ancho
                     y = (caja[1] + caja[3]) / 2 / alto
-                    sentido = contador.actualizar(tid, x, y, llegada)
-                    if sentido:
+                    cruce = contador.actualizar(tid, x, y, llegada)
+                    if cruce:
+                        sentido, instante = cruce
                         if sentido == "entrada":
                             entradas += 1
                         else:
                             salidas += 1
-                        print(f"{time.strftime('%H:%M:%S')} [conteo] {sentido} trackId={tid}")
+                        print(f"{time.strftime('%H:%M:%S')} [conteo] {sentido} trackId={tid}, "
+                              f"tocó la línea {(llegada - instante) * 1000:.0f} ms antes de confirmarse")
                         if cliente:
-                            cliente.reportar_cruce(tid, sentido, llegada)
+                            cliente.reportar_cruce(tid, sentido, instante)
             contador.olvidar_viejos(llegada)
 
             procesados += 1

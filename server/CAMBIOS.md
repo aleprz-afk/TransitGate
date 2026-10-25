@@ -1,6 +1,6 @@
 # Cambios del servidor
 
-Responsable: Alex · Última actualización: 25 de octubre de 2026 · Todo está en `main` hasta el PR #21; en curso: `feat/lector-pn532` (Karol). Los contratos están en `docs/`: Contrato de la API v1.4 y Contratos de integración v1.9
+Responsable: Alex · Última actualización: 25 de octubre de 2026 · Todo está en `main` hasta el PR #22; en curso: `feat/vision-instante-cruce`. Los contratos están en `docs/`: Contrato de la API v1.5 y Contratos de integración v1.10
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -23,7 +23,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - **Firmware del ESP32-CAM** (`firmware/esp32-cam/`, Arduino): transmite MJPEG en `http://<ip>:81/stream` (C3). Probado en la placa por WiFi: OV3660, VGA, 24,6 FPS.
 - **`sim-esp32`** (`tools/sim-esp32/`): simula la placa en el PC con el mismo código del firmware. Con la web y la API alcanza para demostrar el H2 sin hardware.
 - **Servicio de visión** (`vision/`, Python + YOLO + ByteTrack): detecta personas en el stream de la CAM, cuenta los cruces de la línea virtual y los reporta a la API con su latido (C4). Probado contra la API real; falta la prueba con personas en vista cenital.
-- Hay 209 pruebas automatizadas: 153 del servidor (dominio, casos de uso y 16 de integración contra un PostgreSQL de verdad), 29 del firmware y 27 de la visión.
+- Hay 214 pruebas automatizadas: 153 del servidor (dominio, casos de uso y 16 de integración contra un PostgreSQL de verdad), 29 del firmware y 32 de la visión.
 
 ## Decisiones
 
@@ -113,10 +113,11 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
   - `horaFotograma` va en UTC con formato ISO-8601 **terminado en `Z`** (por ejemplo `2026-10-13T20:30:01.450Z`). Si no, responde 400 `HoraFotogramaInvalida`.
   - El mismo `sesionVision` + `trackId` reportado dos veces responde `duplicado`.
   - Un cruce de `salida` responde `registrado`: no consume pasos ni es fraude.
+  - `horaFotograma` es el instante en que la persona tocó la línea, interpolado entre dos fotos; no la foto que confirma el cruce al salir de la franja (Contratos de integración v1.10).
   - Un cruce de entrada consume el paso si su fotograma cae dentro de los 10 s de la ventana. Sin paso disponible, responde `fraude` con un `alertaId`.
 - **Latido** `POST /api/torniquetes/tq_1/vision/latido` cada 5 s, con `fps` y `sesionVision`. Tras 15 s sin señal, el panel muestra la visión **fuera de línea**.
 - **Credencial:** envía la cabecera `X-Device-Key` con la clave de la visión en los cruces y en los latidos; según `vision/config.yaml`, va en la variable de entorno `TG_VISION_KEY`. Es distinta de la del ESP32: la del ESP32 no sirve en las rutas de la visión, ni al revés. Mismo calendario que para Karol: tolerante hasta después del H1.
-- **Cámara (C3):** el firmware ya está en `firmware/esp32-cam/` y transmite MJPEG en `http://<ip>:81/stream`, VGA 640×480 con calidad 12. Medido desde el PC: 24,6 FPS, ~12 KB por cuadro. `http://<ip>/` muestra el video para ajustar el encuadre y `http://<ip>/capture` da un JPEG suelto. Para leerlo con OpenCV basta `cv2.VideoCapture("http://<ip>:81/stream")`. La orientación (`VOLTEAR_VERTICAL`, `ESPEJO_HORIZONTAL`) se ajusta en `config.h` al montarla.
+- **Cámara (C3):** el firmware ya está en `firmware/esp32-cam/` y transmite MJPEG en `http://<ip>:81/stream`, VGA 640×480 con calidad 12. Medido desde el PC: 24,6 FPS, ~12 KB por cuadro. `http://<ip>/` muestra el video para ajustar el encuadre y `http://<ip>/capture` da un JPEG suelto. Para leerlo usa `LectorStream` de `vision/stream.py`: `cv2.VideoCapture` se atasca con este stream (huecos de más de 1 s). La orientación (`VOLTEAR_VERTICAL`, `ESPEJO_HORIZONTAL`) se ajusta en `config.h` al montarla.
 - **Servicio (C4):** ya está en `vision/` y cumple las reglas de arriba; ver `vision/README.md`. Lo que falta es calibrarlo con la CAM montada: la línea, la franja (`margen_linea`) y el sentido van en `config.yaml`, y `--ver` muestra todo encima del video.
 - **RNF-06:** cada cruce deja en el log de la API una línea `RNF-06` con la hora del fotograma, la hora de llegada y el retraso en milisegundos.
 
@@ -293,6 +294,7 @@ Lo que sigue, en orden (17 de octubre). Lo pendiente de cada integrante está en
 - Servicio de visión en `vision/` (C4): YOLO nano preentrenado a 320 px con ByteTrack, conteo de cruces con una franja alrededor de la línea (el temblor del recuadro sobre la línea contaba entrada y salida a la vez) y un reporte por `trackId`. Cruces por una cola con plazo de 1 s y 3 reintentos, latido cada 5 s y retrasos en `cruces.csv` (RNF-06). 17 FPS procesados en el CPU. Probado contra la API en modo estricto: `consumido` con `sim-esp32`, `fraude`, `registrado`, `duplicado` y 401. 23 pruebas.
 - Contratos de integración v1.9: `imgsz` y `margen_linea` en el `config.yaml` de la visión.
 - Visión: el stream se lee con un lector propio (`vision/stream.py`) en vez de `cv2.VideoCapture`, que se atascaba con la ESP32 (huecos de hasta 1,2 s y caídas a 2 FPS que la cámara no tenía). En 60 s: de 8 esperas de más de 300 ms a ninguna, ~25 FPS procesados. La ventana de `--ver` ya no se congela sin señal y el modelo se calienta antes de conectar. 4 pruebas nuevas.
+- Visión: `horaFotograma` es ahora el instante en que la persona tocó la línea, interpolado linealmente entre las dos fotos en que cambió de lado. Antes era la foto que confirma el cruce al salir de la franja, que llega unas fotos después. Contrato de la API v1.5 y Contratos de integración v1.10 (solo cambia la definición; el formato es el mismo). 5 pruebas nuevas.
 
 **17 de octubre (semana 2)**
 - Firmware del ESP32 principal en MicroPython (`firmware/esp32-main/`): reglas de C1 con pruebas, cliente HTTP con timeouts, WiFi, servo, sirena, LED de estado y lector simulado. Probado en la placa sin red y, desde el PC, contra la API.
