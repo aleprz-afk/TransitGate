@@ -489,3 +489,8 @@ firmware/esp32-main/config.json
 
 # Configuración del ESP32-CAM con la clave del WiFi (RNF-25)
 firmware/esp32-cam/camara/config.h
+
+# Servicio de visión: entorno virtual y pesos de YOLO (se descargan solos)
+vision/.venv/
+vision/*.pt
+vision/cruces.csv

@@ -1,6 +1,6 @@
 # Cambios del servidor
 
-Responsable: Alex · Última actualización: 25 de octubre de 2026 · Todo está en `main` hasta el PR #18; en curso: `feat/esp32-cam-stream`. Los contratos están en `docs/`: Contrato de la API v1.4 y Contratos de integración v1.8
+Responsable: Alex · Última actualización: 25 de octubre de 2026 · Todo está en `main` hasta el PR #19; en curso: `feat/vision-prueba-yolo`. Los contratos están en `docs/`: Contrato de la API v1.4 y Contratos de integración v1.9
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -22,7 +22,8 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - **Firmware del ESP32 principal** (`firmware/esp32-main/`, MicroPython): reglas de C1, cliente HTTP con timeouts, WiFi, servo, sirena, LED y un lector simulado; cargado en una ESP32 real. Falta el lector PN532.
 - **Firmware del ESP32-CAM** (`firmware/esp32-cam/`, Arduino): transmite MJPEG en `http://<ip>:81/stream` (C3). Probado en la placa por WiFi: OV3660, VGA, 24,6 FPS.
 - **`sim-esp32`** (`tools/sim-esp32/`): simula la placa en el PC con el mismo código del firmware. Con la web y la API alcanza para demostrar el H2 sin hardware.
-- Hay 165 pruebas automatizadas: 153 del servidor (dominio, casos de uso y 16 de integración contra un PostgreSQL de verdad) y 12 del firmware.
+- **Servicio de visión** (`vision/`, Python + YOLO + ByteTrack): detecta personas en el stream de la CAM, cuenta los cruces de la línea virtual y los reporta a la API con su latido (C4). Probado contra la API real; falta la prueba con personas en vista cenital.
+- Hay 188 pruebas automatizadas: 153 del servidor (dominio, casos de uso y 16 de integración contra un PostgreSQL de verdad), 12 del firmware y 23 de la visión.
 
 ## Decisiones
 
@@ -115,6 +116,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - **Latido** `POST /api/torniquetes/tq_1/vision/latido` cada 5 s, con `fps` y `sesionVision`. Tras 15 s sin señal, el panel muestra la visión **fuera de línea**.
 - **Credencial:** envía la cabecera `X-Device-Key` con la clave de la visión en los cruces y en los latidos; según `vision/config.yaml`, va en la variable de entorno `TG_VISION_KEY`. Es distinta de la del ESP32: la del ESP32 no sirve en las rutas de la visión, ni al revés. Mismo calendario que para Karol: tolerante hasta después del H1.
 - **Cámara (C3):** el firmware ya está en `firmware/esp32-cam/` y transmite MJPEG en `http://<ip>:81/stream`, VGA 640×480 con calidad 12. Medido desde el PC: 24,6 FPS, ~12 KB por cuadro. `http://<ip>/` muestra el video para ajustar el encuadre y `http://<ip>/capture` da un JPEG suelto. Para leerlo con OpenCV basta `cv2.VideoCapture("http://<ip>:81/stream")`. La orientación (`VOLTEAR_VERTICAL`, `ESPEJO_HORIZONTAL`) se ajusta en `config.h` al montarla.
+- **Servicio (C4):** ya está en `vision/` y cumple las reglas de arriba; ver `vision/README.md`. Lo que falta es calibrarlo con la CAM montada: la línea, la franja (`margen_linea`) y el sentido van en `config.yaml`, y `--ver` muestra todo encima del video.
 - **RNF-06:** cada cruce deja en el log de la API una línea `RNF-06` con la hora del fotograma, la hora de llegada y el retraso en milisegundos.
 
 ### Ana — web (interfaz C6)
@@ -263,7 +265,7 @@ Lo que sigue, en orden (17 de octubre). Lo pendiente de cada integrante está en
 2. **Lector PN532** en el firmware (`lector_pn532.py`, I2C en GPIO 21 y 22, dirección `0x24`), con la misma interfaz que `lector_simulado.py`: `leer()` devuelve el UID o `None`.
 3. **ESP32 con WiFi** de 2,4 GHz contra la API: llenar `config.json` (red, IP de la laptop, `deviceKey`) y comprobar en el panel que aparece "ESP32 en línea".
 4. **Servo y sirena** conectados a la placa y calibrados (C8).
-5. **Visión:** la ESP32-CAM ya transmite (25 de octubre). Sigue el servicio en Python con YOLO sobre ese stream y la prueba del ángulo cenital, que es el riesgo técnico más grande (MVP §8).
+5. **Prueba del ángulo cenital** con la CAM montada y personas reales: 20 colados, 40 pasos y 50 cruces (RNF-07 a RNF-09). Es el riesgo técnico más grande (MVP §8). Si no llega a las metas, se ajusta en el orden de RNF §10.3 y solo al final se afina YOLO con imágenes propias.
 6. **Servidor:** modo estricto de `X-Device-Key`, medición de RNF-03, registrar quién apagó la alarma y, en la semana 6, RF-46.
 
 ## Limitaciones actuales
@@ -278,13 +280,15 @@ Lo que sigue, en orden (17 de octubre). Lo pendiente de cada integrante está en
 | El desafío del celular es fijo | Fase 4 |
 | En la práctica hay un solo rol de personal: el Operador puede todo lo del panel (MVP §3.1), así que RF-06 CA3 (taquilla sin apagar alarmas) todavía no aplica | Entrega final |
 | No hay recuperación de contraseña (RF-04) ni administración de operadores (RF-42) | Después del MVP (Should) |
-| No hay visión ni `sim-vision`: sin ellos no hay cruces, así que el paso solo se cierra por vencimiento y no se puede demostrar el colado (paso 8) | `sim-vision` en la semana 3; la visión real, Wili |
+| La visión todavía no se ha medido con personas en vista cenital (RNF-07 a RNF-09), y no hay `sim-vision` para el guion sin hardware | Prueba del ángulo con la maqueta; `sim-vision` en la semana 3 |
 | El firmware usa un lector simulado | Con el PN532 (18 de octubre) |
 
 ## Historial
 
 **25 de octubre (semana 3)**
 - Firmware del ESP32-CAM en Arduino (`firmware/esp32-cam/camara/`), basado en CameraWebServer: página, `/capture` y MJPEG en `:81/stream` (C3), con FPS y RSSI en el puerto serie. Probado en la placa (OV3660, PSRAM de 4 MB) por WiFi de 2,4 GHz: 24,6 FPS en VGA con calidad 12.
+- Servicio de visión en `vision/` (C4): YOLO nano preentrenado a 320 px con ByteTrack, conteo de cruces con una franja alrededor de la línea (el temblor del recuadro sobre la línea contaba entrada y salida a la vez) y un reporte por `trackId`. Cruces por una cola con plazo de 1 s y 3 reintentos, latido cada 5 s y retrasos en `cruces.csv` (RNF-06). 17 FPS procesados en el CPU. Probado contra la API en modo estricto: `consumido` con `sim-esp32`, `fraude`, `registrado`, `duplicado` y 401. 23 pruebas.
+- Contratos de integración v1.9: `imgsz` y `margen_linea` en el `config.yaml` de la visión.
 
 **17 de octubre (semana 2)**
 - Firmware del ESP32 principal en MicroPython (`firmware/esp32-main/`): reglas de C1 con pruebas, cliente HTTP con timeouts, WiFi, servo, sirena, LED de estado y lector simulado. Probado en la placa sin red y, desde el PC, contra la API.
