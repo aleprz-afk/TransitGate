@@ -13,66 +13,21 @@ Teclas: q sale, r reinicia los contadores.
 """
 import argparse
 import os
-import threading
 import time
 
 import cv2
+import numpy as np
 import yaml
 from ultralytics import YOLO
 
 from api import ClienteVision, nueva_sesion
 from conteo import ContadorCruces
+from stream import LectorStream
 
 PERSONA = 0  # clase person de COCO
 AQUI = os.path.dirname(os.path.abspath(__file__))
-
-
-class LectorStream:
-    """Lee el MJPEG en un hilo y se queda solo con el último cuadro y su hora de llegada.
-
-    cv2.VideoCapture acumula cuadros si el modelo va más lento que la cámara; así la
-    detección siempre trabaja sobre lo más reciente. La hora de llegada es la
-    horaFotograma del cruce (S13).
-    """
-
-    def __init__(self, url, log=print):
-        self.url = url
-        self.log = log
-        self.recibidos = 0
-        self._cuadro = None
-        self._llegada = None
-        self._candado = threading.Lock()
-        self.activo = True
-        threading.Thread(target=self._leer, daemon=True).start()
-
-    def _leer(self):
-        conectado = None
-        while self.activo:
-            cap = cv2.VideoCapture(self.url)
-            while self.activo and cap.isOpened():
-                ok, cuadro = cap.read()
-                if not ok:
-                    break
-                llegada = time.time()
-                if not conectado:
-                    self.log(f"[camara] stream conectado: {self.url}")
-                    conectado = True
-                with self._candado:
-                    self._cuadro, self._llegada = cuadro, llegada
-                    self.recibidos += 1
-            cap.release()
-            if self.activo:
-                if conectado is not False:
-                    self.log("[camara] sin stream; reintentando cada segundo")
-                conectado = False
-                time.sleep(1)
-
-    def ultimo(self):
-        """(cuadro, hora de llegada) del cuadro más reciente no leído, o (None, None)."""
-        with self._candado:
-            cuadro, llegada = self._cuadro, self._llegada
-            self._cuadro = None
-            return cuadro, llegada
+VENTANA = "TransitGate - vision"
+SIN_SENAL_SEG = 1.0
 
 
 def cargar_config(ruta):
@@ -99,6 +54,16 @@ def dibujar(cuadro, contador, cajas, texto):
     cv2.putText(cuadro, texto, (5, 16), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
 
 
+def atender_teclas():
+    """Atiende la ventana (sin esto se congela) y traduce las teclas: q sale, r reinicia."""
+    tecla = cv2.waitKey(1) & 0xFF
+    if tecla == ord("q"):
+        return "salir"
+    if tecla == ord("r"):
+        return "reiniciar"
+    return None
+
+
 def main():
     p = argparse.ArgumentParser(description="Servicio de visión de TransitGate")
     p.add_argument("--config", default=os.path.join(AQUI, "config.yaml"))
@@ -119,6 +84,8 @@ def main():
     contador = ContadorCruces(tuple(c["linea"]["p1"]), tuple(c["linea"]["p2"]),
                               c["sentido_entrada"], c.get("margen_linea", 0.05))
     modelo = YOLO(os.path.join(AQUI, c["modelo"]) if not os.path.isabs(c["modelo"]) else c["modelo"])
+    # La primera inferencia tarda ~1,3 s en preparar el modelo; se hace antes del stream.
+    modelo.predict(np.zeros((480, 640, 3), np.uint8), imgsz=c.get("imgsz", 320), verbose=False, save=False)
     lector = LectorStream(stream_url)
 
     fps = {"valor": 0.0}
@@ -133,10 +100,28 @@ def main():
 
     entradas = salidas = 0
     procesados, desde, recibidos_desde, fps_cam = 0, time.time(), 0, 0.0
+    mostrado = None    # último cuadro dibujado, para la ventana mientras no hay señal
     try:
         while True:
+            ahora = time.time()
+            if ahora - desde >= 2:
+                fps["valor"] = procesados / (ahora - desde)
+                fps_cam = (lector.recibidos - recibidos_desde) / (ahora - desde)
+                procesados, desde, recibidos_desde = 0, ahora, lector.recibidos
+
             cuadro, llegada = lector.ultimo()
             if cuadro is None:
+                # La ventana se sigue atendiendo aunque no lleguen cuadros; si no, Windows
+                # la deja de pintar y la marca como colgada.
+                if a.ver:
+                    sin_senal = lector.ultima_llegada is None or ahora - lector.ultima_llegada > SIN_SENAL_SEG
+                    if sin_senal and mostrado is not None:
+                        aviso = mostrado.copy()
+                        cv2.putText(aviso, "SIN SENAL DE LA CAMARA", (20, aviso.shape[0] // 2),
+                                    cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 0, 255), 2)
+                        cv2.imshow(VENTANA, aviso)
+                    if atender_teclas() == "salir":
+                        break
                 time.sleep(0.005)
                 continue
 
@@ -162,21 +147,16 @@ def main():
             contador.olvidar_viejos(llegada)
 
             procesados += 1
-            ahora = time.time()
-            if ahora - desde >= 2:
-                fps["valor"] = procesados / (ahora - desde)
-                fps_cam = (lector.recibidos - recibidos_desde) / (ahora - desde)
-                procesados, desde, recibidos_desde = 0, ahora, lector.recibidos
-
             if a.ver:
                 dibujar(cuadro, contador, cajas,
                         f"YOLO {fps['valor']:.1f} FPS | camara {fps_cam:.1f} FPS | "
                         f"personas {len(cajas)} | entradas {entradas} | salidas {salidas}")
-                cv2.imshow("TransitGate - vision", cuadro)
-                tecla = cv2.waitKey(1) & 0xFF
-                if tecla == ord("q"):
+                cv2.imshow(VENTANA, cuadro)
+                mostrado = cuadro
+                accion = atender_teclas()
+                if accion == "salir":
                     break
-                if tecla == ord("r"):
+                if accion == "reiniciar":
                     entradas = salidas = 0
                     contador.reiniciar()
     except KeyboardInterrupt:
