@@ -9,10 +9,10 @@ Lee la tarjeta, la reporta a la API, manda un latido cada 300 ms y aplica lo que
 | Parte | Estado |
 | --- | --- |
 | Reglas de C1 (`controlador.py`) | Hechas, con 12 pruebas en el PC |
-| Cliente HTTP con timeout (`api.py`) | Probado desde el PC contra la API real; en la placa falta probarlo con WiFi |
-| WiFi (`red.py`) | Escrito; falta probarlo con la red de 2,4 GHz |
+| Cliente HTTP con timeout (`api.py`) | Probado en la placa por WiFi contra la API en modo estricto: latidos de ~30 ms y una lectura real |
+| WiFi (`red.py`) | Probado con una red de 2,4 GHz (la de casa); falta la de la demo |
 | Servo, sirena y LED (`actuadores.py`) | El PWM del servo y la sirena arrancan bien en la placa; faltan conectarlos y probarlos |
-| Lector PN532 (`lector_pn532.py`) | Probado con el módulo Elechouse V3 real: lee tarjetas. 17 pruebas en el PC contra un PN532 simulado |
+| Lector PN532 (`lector_pn532.py`) | Probado con el módulo Elechouse V3 real: lee tarjetas. 21 pruebas en el PC contra un PN532 simulado. Con los pines sin soldar se cae al acercar la tarjeta |
 | Lector simulado (`lector_simulado.py`) | Para probar sin el PN532 (`"lector": "simulado"`) |
 
 ## Archivos
@@ -22,7 +22,7 @@ Lee la tarjeta, la reporta a la API, manda un latido cada 300 ms y aplica lo que
 - `api.py`: cliente HTTP con sockets y un plazo por petición: 250 ms el latido y 3 s la lectura. `urequests` no tiene timeout y bloquearía el lector (nota de RNF-01).
 - `red.py`: conecta y reconecta el WiFi en segundo plano.
 - `actuadores.py`: servo (PWM 50 Hz en GPIO 13), sirena (GPIO 26, por transistor o relé) y LED de la placa (GPIO 2: parpadea sin conexión, fijo en modo registro).
-- `lector_pn532.py`: el PN532 por I2C (SDA en GPIO 21, SCL en GPIO 22, dirección `0x24`; interruptores del módulo en I2C). Se usa con `"lector": "pn532"` en `config.json`. `leer()` no bloquea: manda la búsqueda de tarjeta y en cada vuelta solo pregunta si el PN532 ya respondió. Si el lector no aparece o se desconecta, el resto del firmware sigue y lo vuelve a iniciar cada 2 s (`[lector] PN532 …` en el log).
+- `lector_pn532.py`: el PN532 por I2C (SDA en GPIO 21, SCL en GPIO 22, dirección `0x24`; interruptores del módulo en I2C). Se usa con `"lector": "pn532"` en `config.json`. `leer()` no bloquea: manda la búsqueda de tarjeta y en cada vuelta solo pregunta si el PN532 ya respondió. Si el lector no aparece o se desconecta, el resto del firmware sigue y lo vuelve a iniciar cada 2 s (`[lector] PN532 …` en el log). El reinicio también va por pasos, sin `sleep`: solo el primer inicio, antes del bucle, espera las respuestas.
 - `lector_simulado.py`: para probar sin el PN532. El botón BOOT "acerca" la siguiente tarjeta de `uidsPrueba`, o se escribe un UID y Enter por el puerto serie.
 - `config.example.json`: copia como `config.json` y llénalo (red, IP de la laptop, clave del dispositivo). `config.json` no se sube al repositorio (RNF-25).
 - `pruebas/`: pruebas del controlador en el PC.
