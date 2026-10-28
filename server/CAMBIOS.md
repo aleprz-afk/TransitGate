@@ -1,6 +1,6 @@
 # Cambios del servidor
 
-Responsable: Alex · Última actualización: 25 de octubre de 2026 · Todo está en `main` hasta el PR #22; en curso: `feat/vision-instante-cruce`. Los contratos están en `docs/`: Contrato de la API v1.5 y Contratos de integración v1.10
+Responsable: Alex · Última actualización: 25 de octubre de 2026 · Todo está en `main` hasta el PR #23; en curso: `fix/lector-pn532-sin-bloqueo`. Los contratos están en `docs/`: Contrato de la API v1.5 y Contratos de integración v1.10
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -23,7 +23,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - **Firmware del ESP32-CAM** (`firmware/esp32-cam/`, Arduino): transmite MJPEG en `http://<ip>:81/stream` (C3). Probado en la placa por WiFi: OV3660, VGA, 24,6 FPS.
 - **`sim-esp32`** (`tools/sim-esp32/`): simula la placa en el PC con el mismo código del firmware. Con la web y la API alcanza para demostrar el H2 sin hardware.
 - **Servicio de visión** (`vision/`, Python + YOLO + ByteTrack): detecta personas en el stream de la CAM, cuenta los cruces de la línea virtual y los reporta a la API con su latido (C4). Probado contra la API real; falta la prueba con personas en vista cenital.
-- Hay 214 pruebas automatizadas: 153 del servidor (dominio, casos de uso y 16 de integración contra un PostgreSQL de verdad), 29 del firmware y 32 de la visión.
+- Hay 218 pruebas automatizadas: 153 del servidor (dominio, casos de uso y 16 de integración contra un PostgreSQL de verdad), 33 del firmware y 32 de la visión.
 
 ## Decisiones
 
@@ -72,6 +72,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - **Firmware empezado en `firmware/esp32-main/` (17 de octubre):** lo armé con la ESP32 que tengo, ya con MicroPython 1.29, para no llegar al H2 sin nada. Tiene las reglas de C1 en `controlador.py` (con 12 pruebas en el PC), el cliente HTTP con timeouts (`api.py`, ya probado contra la API), el WiFi, el servo, la sirena, el LED de estado y un lector simulado mientras llega el PN532. Cómo cargarlo y probarlo está en `firmware/esp32-main/README.md`. Tómalo como base: revisa el PR y cambia lo que quieras, sigue siendo tuyo.
 - **`sim-esp32` listo (`tools/sim-esp32/`):** corre en el PC con los comandos de C11 (`tarjeta`, `celular`, `reiniciar`, `cortar-red`, `no-confirmar`) y reusa `controlador.py` y `api.py` del firmware, así que se comporta igual que la placa. Ya no hace falta la placa para el H2 ni para que Ana y Wili prueben.
 - **`lector_pn532.py` escrito (25 de octubre):** I2C en GPIO 21 y 22, dirección `0x24`, misma interfaz que el simulado (`leer()` devuelve el UID en hex mayúsculas o `None`) y sin bloquear el latido. Tiene 17 pruebas en el PC contra un PN532 simulado y ya lee tarjetas con el módulo real (Elechouse V3). Se activa con `"lector": "pn532"` en `config.json`.
+- **Reinicio del PN532 por pasos (25 de octubre, para que lo revises):** con la placa en WiFi contra la API, el lector se caía al acercar la tarjeta (los cables van a presión en el conector I2C) y cada reinicio detenía el bucle hasta 558 ms cada 2 s, porque `_iniciar()` esperaba cada respuesta con `sleep`; en una prueba la ESP32 pasó 10 s sin latidos y cerró por RF-25. Ahora el reinicio avanza en cada `leer()` sin esperar, igual que la búsqueda; solo el primer inicio, antes del bucle, espera. Hay 4 pruebas nuevas que fallan con la versión anterior. Lo que sigue siendo tuyo: soldar el conector de 4 pines del PN532.
 - **Lo que falta y es tuyo:** probar el PN532 con tarjetas reales y pasar sus UID para agregarlos, conectar y calibrar el servo y la sirena (los pulsos de 0,5 y 1,5 ms son un punto de partida), y probarlo todo con la red de la demo. Si tienes código del PN532 o del servo, súbelo y lo juntamos.
 - **`config.json` (contratos v1.8):** agrega `lector` (`"pn532"` o `"simulado"`) y `uidsPrueba`. Copia `config.example.json` como `config.json`; ese archivo no se sube porque lleva la clave del WiFi.
 
@@ -265,7 +266,7 @@ Lo que sigue, en orden (17 de octubre). Lo pendiente de cada integrante está en
 
 1. **`sim-vision`** (`tools/sim-vision/`, C11): latido cada 5 s y comandos `entrada`, `salida`, `colado`, `retraso <ms>` y `silencio <s>`. Con él y `sim-esp32` se hace el guion completo sin hardware (RNF-38). Es de Wili; si no llega pronto, lo hace Alex con el mismo enfoque que `sim-esp32`.
 2. **UID de las tarjetas reales:** el PN532 ya lee tarjetas (25 de octubre); falta pasarle a Alex sus UID para registrarlas y soldar los pines del módulo antes de la demo.
-3. **ESP32 con WiFi** de 2,4 GHz contra la API: llenar `config.json` (red, IP de la laptop, `deviceKey`) y comprobar en el panel que aparece "ESP32 en línea".
+3. **Pines del PN532 soldados:** la ESP32 ya está en línea por WiFi contra la API (25 de octubre), pero el lector se cae al acercar la tarjeta porque los cables van metidos a presión en el conector I2C.
 4. **Servo y sirena** conectados a la placa y calibrados (C8).
 5. **Prueba del ángulo cenital** con la CAM montada y personas reales: 20 colados, 40 pasos y 50 cruces (RNF-07 a RNF-09). Es el riesgo técnico más grande (MVP §8). Si no llega a las metas, se ajusta en el orden de RNF §10.3 y solo al final se afina YOLO con imágenes propias.
 6. **Servidor:** modo estricto de `X-Device-Key`, medición de RNF-03, registrar quién apagó la alarma y, en la semana 6, RF-46.
@@ -283,7 +284,7 @@ Lo que sigue, en orden (17 de octubre). Lo pendiente de cada integrante está en
 | En la práctica hay un solo rol de personal: el Operador puede todo lo del panel (MVP §3.1), así que RF-06 CA3 (taquilla sin apagar alarmas) todavía no aplica | Entrega final |
 | No hay recuperación de contraseña (RF-04) ni administración de operadores (RF-42) | Después del MVP (Should) |
 | La visión todavía no se ha medido con personas en vista cenital (RNF-07 a RNF-09), y no hay `sim-vision` para el guion sin hardware | Prueba del ángulo con la maqueta; `sim-vision` en la semana 3 |
-| Los pines del PN532 no están soldados: el contacto puede fallar | Antes del H2 (Karol) |
+| Los pines del PN532 no están soldados: al acercar la tarjeta el lector se cae (`ENODEV`, `ETIMEDOUT`) y no siempre alcanza a leerla | Antes del H2 (Karol) |
 
 ## Historial
 
@@ -295,6 +296,8 @@ Lo que sigue, en orden (17 de octubre). Lo pendiente de cada integrante está en
 - Contratos de integración v1.9: `imgsz` y `margen_linea` en el `config.yaml` de la visión.
 - Visión: el stream se lee con un lector propio (`vision/stream.py`) en vez de `cv2.VideoCapture`, que se atascaba con la ESP32 (huecos de hasta 1,2 s y caídas a 2 FPS que la cámara no tenía). En 60 s: de 8 esperas de más de 300 ms a ninguna, ~25 FPS procesados. La ventana de `--ver` ya no se congela sin señal y el modelo se calienta antes de conectar. 4 pruebas nuevas.
 - Visión: `horaFotograma` es ahora el instante en que la persona tocó la línea, interpolado linealmente entre las dos fotos en que cambió de lado. Antes era la foto que confirma el cruce al salir de la franja, que llega unas fotos después. Contrato de la API v1.5 y Contratos de integración v1.10 (solo cambia la definición; el formato es el mismo). 5 pruebas nuevas.
+- ESP32 principal en línea por WiFi contra la API en modo estricto: latidos de ~30 ms, el PN532 leyó una tarjeta real (`CB175353`) y la API respondió `TarjetaNoRegistrada`.
+- Firmware: el reinicio del PN532 va por pasos y ya no detiene el bucle. Con los pines flojos el lector se caía al acercar la tarjeta y cada reinicio bloqueaba el bucle hasta 558 ms cada 2 s; en una prueba la ESP32 pasó 10 s sin latidos y cerró por RF-25. 4 pruebas nuevas.
 
 **17 de octubre (semana 2)**
 - Firmware del ESP32 principal en MicroPython (`firmware/esp32-main/`): reglas de C1 con pruebas, cliente HTTP con timeouts, WiFi, servo, sirena, LED de estado y lector simulado. Probado en la placa sin red y, desde el PC, contra la API.

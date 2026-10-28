@@ -13,12 +13,14 @@ from lector_pn532 import ACK, LectorPn532, datos_respuesta, trama, uid_de_busque
 class Reloj:
     def __init__(self):
         self.ms = 1000
+        self.dormido_ms = 0     # cuánto se durmió: dentro de leer() tiene que ser 0
 
     def __call__(self):
         return self.ms
 
     def dormir(self, ms):
         self.ms += ms
+        self.dormido_ms += ms
 
 
 def respuesta(comando, datos=b""):
@@ -197,6 +199,64 @@ class LectorTests(unittest.TestCase):
         self.assertIsNone(lector.leer())              # todavía no pasan los 2 s
         reloj.ms += lector_pn532.REINICIO_MS
         self.assertEqual("04A1B2C3", leer_hasta_uid(lector, reloj))
+
+    def test_el_reinicio_no_duerme_dentro_de_leer(self):  # RNF-01: lo que bloqueaba el latido en la placa
+        lector, pn532, reloj = nuevo()
+        pn532.conectado = False
+        lector.leer()                                  # se pierde la conexión
+        pn532.conectado = True
+        pn532.tarjetas = [b"\x04\xa1\xb2\xc3"]
+        reloj.ms += lector_pn532.REINICIO_MS
+        reloj.dormido_ms = 0
+        self.assertEqual("04A1B2C3", leer_hasta_uid(lector, reloj))
+        self.assertEqual(0, reloj.dormido_ms)
+
+    def test_el_reinicio_espera_al_pn532_entre_llamadas(self):
+        lector, pn532, reloj = nuevo()
+        pn532.conectado = False
+        lector.leer()
+        pn532.conectado = True
+        reloj.ms += lector_pn532.REINICIO_MS
+        antes = reloj.ms
+        self.assertIsNone(lector.leer())               # lo despierta y vuelve sin esperar los 50 ms
+        self.assertEqual(antes, reloj.ms)
+        self.assertFalse(lector._listo)
+        reloj.ms += lector_pn532.DESPERTAR_MS
+        lector.leer()                                  # pasado el despertar, termina el inicio
+        self.assertTrue(lector._listo)
+        self.assertEqual("1.6", lector.version)
+
+    def test_si_el_reinicio_falla_tampoco_bloquea_y_vuelve_a_intentar(self):
+        lector, pn532, reloj = nuevo()
+        pn532.conectado = False
+        lector.leer()
+        reloj.dormido_ms = 0
+        for _ in range(3):                             # tres reinicios fallidos seguidos
+            reloj.ms += lector_pn532.REINICIO_MS
+            for _ in range(5):
+                self.assertIsNone(lector.leer())
+                reloj.ms += 20
+        self.assertEqual(0, reloj.dormido_ms)
+        self.assertFalse(lector._listo)
+        pn532.conectado = True
+        pn532.tarjetas = [b"\x04\xa1\xb2\xc3"]
+        reloj.ms += lector_pn532.REINICIO_MS
+        self.assertEqual("04A1B2C3", leer_hasta_uid(lector, reloj))
+
+    def test_si_no_contesta_al_reiniciar_se_rinde_por_plazo(self):
+        lector, pn532, reloj = nuevo()
+        pn532.conectado = False
+        lector.leer()
+        pn532.conectado = True
+        reloj.ms += lector_pn532.REINICIO_MS
+        lector.leer()
+        reloj.ms += lector_pn532.DESPERTAR_MS
+        pn532.readfrom = lambda direccion, largo: b"\x00" * largo   # nunca dice "listo"
+        lector.leer()                                  # escribe GetFirmwareVersion y espera el ACK
+        reloj.ms += lector_pn532.PLAZO_COMANDO_MS + 1
+        lector.leer()
+        self.assertFalse(lector._listo)
+        self.assertIsNone(lector._inicio)              # abandonó este intento; el próximo, en 2 s
 
     def test_si_deja_de_responder_lo_reinicia(self):
         lector, pn532, reloj = nuevo()

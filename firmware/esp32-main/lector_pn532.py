@@ -4,6 +4,8 @@
 # leer() nunca bloquea el bucle de main.py (RNF-01): manda la búsqueda de tarjeta (InListPassiveTarget) y en
 # cada llamada solo pregunta si el PN532 ya respondió. Si el lector falla o se desconecta, leer() devuelve
 # None y vuelve a iniciarlo cada 2 s; el latido y el resto del firmware siguen funcionando.
+# El reinicio también va por pasos: antes esperaba cada respuesta con sleep y, con los pines flojos, detenía
+# el bucle hasta 0,5 s cada 2 s (medido en la placa el 25 oct). Solo el primer inicio, antes del bucle, espera.
 # La tarjeta quieta sobre el lector se reporta en cada búsqueda: controlador.py descarta las repetidas (RF-18 CA3).
 from reloj import ahora_ms, diferencia
 
@@ -24,8 +26,16 @@ PLAZO_COMANDO_MS = 500       # al iniciar, lo que puede tardar cada respuesta
 DESPERTAR_MS = 50           # el PN532 tarda en despertar; antes de eso no contesta (ENODEV)
 INTENTOS_COMANDO = 5        # al iniciar, si no contesta se reintenta cada 20 ms
 PLAZO_RESPUESTA_MS = 3000
+ESPERA_REINTENTO_MS = 20     # entre intentos de escribir un comando que no contestó
 REINICIO_MS = 2000
 LARGO_RESPUESTA = 32         # cabe la respuesta de una tarjeta con UID de hasta 10 bytes
+
+# Lo que se manda al iniciar, en orden.
+COMANDOS_INICIO = (
+    (CMD_FIRMWARE, b""),
+    (CMD_SAM, b"\x01\x14\x01"),                                   # modo normal
+    (CMD_RF, bytes([0x05, 0xFF, 0x01, REINTENTOS_BUSQUEDA])),     # reintentos de la búsqueda
+)
 
 
 def trama(comando, datos=b""):
@@ -89,6 +99,7 @@ class LectorPn532:
         self._esperando = None        # None, "ack" o "respuesta"
         self._enviado_ms = None
         self._ultimo_intento_ms = None
+        self._inicio = None           # estado del inicio en curso (ver _empezar_inicio)
         self._avisado = False         # para escribir una línea por caída, no una por intento
         self.version = None
         self._iniciar()
@@ -98,8 +109,11 @@ class LectorPn532:
     def leer(self):
         ahora = self._reloj()
         if not self._listo:
-            if diferencia(ahora, self._ultimo_intento_ms) >= REINICIO_MS:
-                self._iniciar()
+            if self._inicio is not None:
+                self._paso_inicio(ahora)
+            elif diferencia(ahora, self._ultimo_intento_ms) >= REINICIO_MS:
+                self._empezar_inicio(ahora)
+                self._paso_inicio(ahora)
             return None
         try:
             return self._avanzar(ahora)
@@ -139,57 +153,86 @@ class LectorPn532:
         self._esperando = "ack"
         self._enviado_ms = ahora
 
-    # Inicio
+    # Inicio por pasos: despertar, y por cada comando de COMANDOS_INICIO, escribirlo, esperar el ACK y la respuesta.
 
     def _iniciar(self):
-        self._ultimo_intento_ms = self._reloj()
+        """Primer inicio, antes del bucle de main.py: puede esperar, todavía no hay latidos que cuidar."""
+        self._empezar_inicio(self._reloj())
+        self._paso_inicio(self._reloj())
+        while self._inicio is not None:
+            self._dormir_ms(1)
+            self._paso_inicio(self._reloj())
+
+    def _empezar_inicio(self, ahora):
+        self._ultimo_intento_ms = ahora
         self._esperando = None
         try:
-            try:
-                self._escribir(b"\x00")   # lo despierta; la primera vez suele no contestar
-            except OSError:
-                pass
-            self._dormir_ms(DESPERTAR_MS)
-            firmware = self._comando(CMD_FIRMWARE)
-            if not firmware or len(firmware) < 3 or firmware[0] != 0x32:
-                raise OSError("respuesta inesperada a GetFirmwareVersion")
-            self.version = "%d.%d" % (firmware[1], firmware[2])
-            self._comando(CMD_SAM, b"\x01\x14\x01")                                  # modo normal
-            self._comando(CMD_RF, bytes([0x05, 0xFF, 0x01, REINTENTOS_BUSQUEDA]))    # reintentos
-        except OSError as error:
-            self._falla("no aparece en 0x%02X (%s)" % (self._direccion, error))
-            return
-        self._listo = True
-        self._avisado = False
-        print("[lector] PN532 listo, firmware %s" % self.version)
+            self._escribir(b"\x00")   # lo despierta; la primera vez suele no contestar
+        except OSError:
+            pass
+        self._inicio = {"comando": 0, "fase": "despertar", "desde": ahora, "intentos": 0}
 
-    def _comando(self, comando, datos=b""):
-        """Solo al iniciar: manda el comando y espera el ACK y la respuesta (bloquea unos ms)."""
-        for intento in range(INTENTOS_COMANDO):
+    def _paso_inicio(self, ahora):
+        """Avanza el inicio todo lo que pueda sin esperar; se detiene cuando toca esperar al PN532 o al reloj."""
+        try:
+            while self._inicio is not None and self._avanzar_inicio(ahora):
+                pass
+        except OSError as error:
+            self._inicio = None
+            self._falla("no aparece en 0x%02X (%s)" % (self._direccion, error))
+
+    def _avanzar_inicio(self, ahora):
+        """Un paso del inicio. Devuelve True si se puede seguir de una vez, False si toca esperar."""
+        inicio = self._inicio
+        fase = inicio["fase"]
+        comando, datos = COMANDOS_INICIO[inicio["comando"]]
+
+        if fase in ("despertar", "reintentar"):
+            espera = DESPERTAR_MS if fase == "despertar" else ESPERA_REINTENTO_MS
+            if diferencia(ahora, inicio["desde"]) < espera:
+                return False
+            inicio["fase"] = "escribir"
+            return True
+
+        if fase == "escribir":
             try:
                 self._escribir(trama(comando, datos))
-                break
             except OSError:
-                if intento == INTENTOS_COMANDO - 1:
+                inicio["intentos"] += 1
+                if inicio["intentos"] >= INTENTOS_COMANDO:
                     raise
-                self._dormir_ms(20)
-        self._esperar_preparado(PLAZO_COMANDO_MS)
+                inicio["fase"], inicio["desde"] = "reintentar", ahora
+                return False
+            inicio["fase"], inicio["desde"] = "ack", ahora
+            return True
+
+        # "ack" o "respuesta": esperar a que el PN532 esté listo y leer lo que tenga.
+        if not self._preparado():
+            if diferencia(ahora, inicio["desde"]) > PLAZO_COMANDO_MS:
+                raise OSError("no responde")
+            return False
         leida = self._leer_trama(LARGO_RESPUESTA)
-        if leida.startswith(ACK):
-            self._esperar_preparado(PLAZO_COMANDO_MS)
-            leida = self._leer_trama(LARGO_RESPUESTA)
+        if fase == "ack" and leida.startswith(ACK):
+            inicio["fase"], inicio["desde"] = "respuesta", ahora
+            return True
         # Si no hubo ACK, lo leído ya es la respuesta.
         respuesta = datos_respuesta(leida, comando)
         if respuesta is None:
             raise OSError("respuesta inválida")
-        return respuesta
+        if comando == CMD_FIRMWARE:
+            if len(respuesta) < 3 or respuesta[0] != 0x32:
+                raise OSError("respuesta inesperada a GetFirmwareVersion")
+            self.version = "%d.%d" % (respuesta[1], respuesta[2])
 
-    def _esperar_preparado(self, plazo_ms):
-        inicio = self._reloj()
-        while not self._preparado():
-            if diferencia(self._reloj(), inicio) > plazo_ms:
-                raise OSError("no responde")
-            self._dormir_ms(1)
+        inicio["comando"] += 1
+        if inicio["comando"] < len(COMANDOS_INICIO):
+            inicio["fase"], inicio["intentos"] = "escribir", 0
+            return True
+        self._inicio = None
+        self._listo = True
+        self._avisado = False
+        print("[lector] PN532 listo, firmware %s" % self.version)
+        return False
 
     def _falla(self, motivo):
         if not self._avisado:
