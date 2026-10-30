@@ -7,13 +7,13 @@ using TransitGate.Application.Torniquetes;
 namespace TransitGate.Api.Endpoints;
 
 /// <summary>
-/// Entrega de la tarjeta física en taquilla (Contrato §4 y §8, RF-09, RF-10, RF-36), con sesión del personal.
+/// Entrega de la tarjeta física en taquilla (Contrato §4 y §8, RF-09, RF-10, RF-36), con sesión de Operador o Administrador (RF-06).
 /// </summary>
 public static class TaquillaEndpoints
 {
     public static IEndpointRouteBuilder MapTaquilla(this IEndpointRouteBuilder app)
     {
-        var taquilla = app.MapGroup("/api").WithTags("Taquilla").RequireAuthorization(Politicas.Personal);
+        var taquilla = app.MapGroup("/api").WithTags("Taquilla").RequireAuthorization(Politicas.Taquilla);
         taquilla.MapGet("/tarjetas/solicitudes", ListarSolicitudes)
             .WithSummary("Solicitudes de tarjeta física pendientes, la más antigua primero; ?documento= para buscar una (RF-36)");
         taquilla.MapPost("/torniquetes/{id}/modo-registro", ActivarModoRegistro)

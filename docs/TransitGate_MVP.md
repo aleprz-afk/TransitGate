@@ -1,4 +1,6 @@
-# TransitGate — Producto mínimo viable (MVP) (v1.2)
+# TransitGate — Producto mínimo viable (MVP) (v1.3)
+
+**Cambios en v1.3 (30 oct 2026):** los tres roles del personal se separan como pide RF-06: el Operador hace taquilla, Seguridad apaga la alarma y el Administrador puede las dos cosas (sección 3.1); se agrega una cuenta semilla de Seguridad (sección 3.3).
 
 **Cambios en v1.2 (14 oct 2026):** apagar la alarma deja la alerta Atendida, como pide HU-22, en lugar de cerrarla (sección 3.1).
 
@@ -38,7 +40,7 @@ De los 33 RF Must, el MVP incluye 28. Los 5 restantes son Must de la entrega fin
 
 | Módulo | RF | Simplificación permitida en el MVP |
 | --- | --- | --- |
-| Clientes y autenticación | RF-01, RF-02, RF-03, RF-06 | Un solo rol de personal (`Operador`) que hace taquilla y seguridad; el administrador existe solo como dato semilla |
+| Clientes y autenticación | RF-01, RF-02, RF-03, RF-06 | Tres roles de personal con los permisos de RF-06 (Operador en taquilla, Seguridad apaga la alarma, Administrador ambas); sin pantallas de administración (RF-41 a RF-43): las cuentas existen solo como datos semilla |
 | Tarjetas | RF-07, RF-08, RF-09, RF-10, RF-11 | Solo tarjeta física |
 | Saldo | RF-15, RF-16 | — |
 | Validación de acceso | RF-18, RF-20, RF-21, RF-22, RF-23, RF-25, RF-45 | El firmware ya deja listo el SELECT AID (RF-18 CA5), pero sin app no se usa |
@@ -57,7 +59,7 @@ De los 33 RF Must, el MVP incluye 28. Los 5 restantes son Must de la entrega fin
 
 ### 3.3 Datos semilla del MVP
 
-Existen desde el primer arranque del servidor: el torniquete `tq_1` con sus claves de dispositivo (ESP32 y visión), un administrador, un operador y la tarifa de 3.200. Las claves y las contraseñas iniciales no van en el repositorio: se cargan desde los secretos de usuario de la laptop servidor (RNF-25).
+Existen desde el primer arranque del servidor: el torniquete `tq_1` con sus claves de dispositivo (ESP32 y visión), un administrador, un operador, una cuenta de seguridad y la tarifa de 3.200. Las claves y las contraseñas iniciales no van en el repositorio: se cargan desde los secretos de usuario de la laptop servidor (RNF-25).
 
 ## 4. Por qué este corte no genera retrabajo
 

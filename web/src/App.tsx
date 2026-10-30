@@ -8,7 +8,8 @@ import Recargar from './paginas/cliente/Recargar'
 import { Recargas, Viajes } from './paginas/cliente/Historial'
 import Panel from './paginas/personal/Panel'
 import Taquilla from './paginas/personal/Taquilla'
-import { esPersonal, SesionProvider, useSesion } from './sesion'
+import type { Sesion } from './api/cliente'
+import { esPersonal, puedeEntregarTarjetas, SesionProvider, useSesion } from './sesion'
 import { TiempoReal, useEstadoConexion } from './tiempoReal'
 
 // Portal del cliente y panel de operación (Contratos de integración, C6). Cada ruta pide su rol; la API
@@ -33,7 +34,7 @@ export default function App() {
 
           <Route element={<ConSesion rol="personal" />}>
             <Route path="panel" element={<Panel />} />
-            <Route path="taquilla" element={<Taquilla />} />
+            <Route path="taquilla" element={<ConPermiso permiso={puedeEntregarTarjetas}><Taquilla /></ConPermiso>} />
           </Route>
 
           <Route path="*" element={<Navigate to="/" replace />} />
@@ -73,7 +74,16 @@ function ConSesion({ rol }: { rol: 'cliente' | 'personal' }) {
   )
 }
 
-const enlaces: Record<'cliente' | 'personal', [string, string, LucideIcon][]> = {
+/** Una pantalla del personal que no le toca a este rol lleva al panel (RF-06); la API también responde 403. */
+function ConPermiso({ permiso, children }: { permiso: (sesion: Sesion) => boolean; children: React.ReactNode }) {
+  const { sesion } = useSesion()
+  return sesion && permiso(sesion) ? children : <Navigate to="/panel" replace />
+}
+
+type Permiso = (sesion: Sesion | null | undefined) => boolean
+const todos: Permiso = () => true
+
+const enlaces: Record<'cliente' | 'personal', [string, string, LucideIcon, Permiso?][]> = {
   cliente: [
     ['/mi-tarjeta', 'Mi tarjeta', CreditCard],
     ['/recargar', 'Recargar', Wallet],
@@ -83,7 +93,7 @@ const enlaces: Record<'cliente' | 'personal', [string, string, LucideIcon][]> = 
   ],
   personal: [
     ['/panel', 'Panel', LayoutDashboard],
-    ['/taquilla', 'Taquilla', Ticket],
+    ['/taquilla', 'Taquilla', Ticket, puedeEntregarTarjetas],
   ],
 }
 
@@ -106,7 +116,7 @@ function Marco({ rol }: { rol: 'cliente' | 'personal' }) {
           </button>
         </div>
         <nav className="navegacion">
-          {enlaces[rol].map(([ruta, texto, Icono]) => (
+          {enlaces[rol].filter(([, , , permiso = todos]) => permiso(sesion)).map(([ruta, texto, Icono]) => (
             <NavLink key={ruta} to={ruta} className="con-icono">
               <Icono aria-hidden="true" />
               {texto}
