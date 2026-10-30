@@ -1,19 +1,25 @@
-/* Estilos del portal y del panel: primero el celular de 360 px (RNF-31), con modo oscuro. */
+/*
+ * Estilos del portal y del panel: primero el celular de 360 px (RNF-31), con modo oscuro.
+ * Paleta «índigo cálido»: el índigo es solo para acciones; verde, ámbar y rojo quedan para los estados
+ * (en línea, esperando el cruce, alarma). Todos los textos pasan WCAG AA (4,5:1) en los dos modos.
+ */
 :root {
-  --texto: #1f2328;
-  --suave: #59636e;
-  --fondo: #f6f8fa;
+  --texto: #1e2433;
+  --suave: #5a6072;
+  --fondo: #f7f5f2;
   --tarjeta: #ffffff;
-  --borde: #d1d9e0;
-  --principal: #0b5cad;
+  --borde: #e6e1d8;
+  --principal: #4a55c9;
   --principal-texto: #ffffff;
-  --alarma: #cf222e;
-  --alarma-fondo: #ffebe9;
-  --exito: #1a7f37;
-  --exito-fondo: #dafbe1;
-  --activo: #9a6700;
-  --activo-fondo: #fff8c5;
-  --radio: 10px;
+  --principal-fondo: #eceefb;
+  --alarma: #b4282f;
+  --alarma-fondo: #fce8e8;
+  --alarma-texto: #ffffff;
+  --exito: #24734a;
+  --exito-fondo: #e2f2e8;
+  --activo: #8a5300;
+  --activo-fondo: #fbefd9;
+  --radio: 12px;
 
   font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
   color-scheme: light dark;
@@ -23,19 +29,21 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --texto: #e6edf3;
-    --suave: #9198a1;
-    --fondo: #0d1117;
-    --tarjeta: #151b23;
-    --borde: #3d444d;
-    --principal: #4493f8;
-    --principal-texto: #0d1117;
-    --alarma: #ff7b72;
-    --alarma-fondo: #3c1618;
-    --exito: #3fb950;
-    --exito-fondo: #12261e;
-    --activo: #d29922;
-    --activo-fondo: #2e2510;
+    --texto: #e8eaf2;
+    --suave: #a2a8ba;
+    --fondo: #14161f;
+    --tarjeta: #1c1f2b;
+    --borde: #2e3242;
+    --principal: #9aa3ff;
+    --principal-texto: #14161f;
+    --principal-fondo: #262a45;
+    --alarma: #ff8f8a;
+    --alarma-fondo: #3a1719;
+    --alarma-texto: #14161f;
+    --exito: #6fd39b;
+    --exito-fondo: #15291f;
+    --activo: #f2bb63;
+    --activo-fondo: #2c2312;
   }
 }
 
@@ -380,7 +388,7 @@ button:disabled {
 .peligro {
   background: var(--alarma);
   border-color: var(--alarma);
-  color: #ffffff;
+  color: var(--alarma-texto);   /* en oscuro el rojo es claro: el texto va oscuro */
   font-weight: 600;
   flex: none;
 }
@@ -433,4 +441,150 @@ button:disabled {
   height: 1px;
   overflow: hidden;
   clip: rect(0 0 0 0);
+}
+
+/* Iconos (lucide-react) */
+
+.con-icono {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.con-icono svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.navegacion a.con-icono svg {
+  width: 16px;
+  height: 16px;
+}
+
+/* En el celular, el icono va encima del texto para que las cinco pestañas del portal quepan sin desplazar. */
+@media (max-width: 480px) {
+  .navegacion {
+    justify-content: space-between;
+    padding: 0 4px;
+  }
+
+  .navegacion a.con-icono {
+    flex-direction: column;
+    gap: 2px;
+    padding: 6px 4px;
+    font-size: 0.75rem;
+    flex: 1;
+  }
+
+  .navegacion a.con-icono svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+.icono-principal { color: var(--principal); }
+.icono-exito { color: var(--exito); }
+.icono-activo { color: var(--activo); }
+.icono-alarma { color: var(--alarma); }
+
+.icono-grande {
+  width: 28px;
+  height: 28px;
+  flex: none;
+  color: var(--alarma);
+}
+
+.icono-linea {
+  width: 18px;
+  height: 18px;
+  vertical-align: -3px;
+  margin-right: 6px;
+}
+
+.alerta-texto {
+  flex: 1;
+}
+
+/* Dibujo del torniquete y ventana del paso (panel) */
+
+.dibujo-torniquete {
+  display: block;
+  width: 120px;
+  height: 90px;
+  margin: 4px 0;
+}
+
+.dibujo-torniquete .poste { fill: var(--borde); }
+.dibujo-torniquete .eje,
+.dibujo-torniquete .brazo { fill: var(--suave); }
+.dibujo-torniquete.abierto .eje,
+.dibujo-torniquete.abierto .brazo { fill: var(--activo); }
+
+.dibujo-torniquete .brazo {
+  transform-box: view-box;
+  transform-origin: 45px 58px;   /* el eje: abierto, el brazo sube hasta y ≈ 3 sin salirse */
+}
+
+.dibujo-torniquete.abierto .brazo {
+  transform: rotate(-80deg);
+}
+
+.barra-ventana {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--activo-fondo);
+  overflow: hidden;
+  margin: 4px 0 8px;
+}
+
+.barra-ventana > div {
+  height: 100%;
+  background: var(--activo);
+  animation-name: vaciar;
+  animation-timing-function: linear;
+  animation-fill-mode: forwards;
+}
+
+@keyframes vaciar {
+  from { width: 100%; }
+  to { width: 0; }
+}
+
+/* Movimiento: solo si el sistema no pide reducirlo. La barra de la ventana se mantiene porque informa. */
+
+@media (prefers-reduced-motion: no-preference) {
+  button,
+  .boton,
+  .navegacion a {
+    transition: background-color 0.15s, border-color 0.15s, color 0.15s, transform 0.1s;
+  }
+
+  button:active:not(:disabled),
+  .boton:active {
+    transform: scale(0.98);
+  }
+
+  .dibujo-torniquete .brazo {
+    transition: transform 0.5s cubic-bezier(0.3, 1.4, 0.6, 1);
+  }
+
+  .entra {
+    animation: entra 0.35s ease-out;
+  }
+
+  .alerta-colado,
+  .tarjeta.torniquete.alarma {
+    animation: pulso 1.2s ease-in-out infinite;
+  }
+}
+
+@keyframes entra {
+  from { opacity: 0; transform: translateY(-6px); }
+  to { opacity: 1; transform: none; }
+}
+
+@keyframes pulso {
+  0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--alarma) 40%, transparent); }
+  50% { box-shadow: 0 0 0 8px color-mix(in srgb, var(--alarma) 0%, transparent); }
 }

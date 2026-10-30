@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
 import { Link } from 'react-router'
+import { CircleCheck, CircleX, CreditCard, Plus } from 'lucide-react'
 import { api, mensajeDe, type Esquema } from '../../api/cliente'
 import type { EventoViajeEvento } from '../../api/eventos'
 import { Cargando } from '../../App'
+import { useNumeroAnimado } from '../../movimiento'
 import { enPesos, horaColombia, textoMotivo, textoSoporte } from '../../textos'
 import { useEvento } from '../../tiempoReal'
 
@@ -49,18 +51,32 @@ export default function MiTarjeta() {
   }
 
   if (!tarjeta) return <Cargando />
+  return <Contenido tarjeta={tarjeta} ultimoViaje={ultimoViaje} aviso={aviso} ocupado={ocupado}
+    pedirFisica={pedirFisica} confirmarRecepcion={confirmarRecepcion} />
+}
+
+function Contenido({ tarjeta, ultimoViaje, aviso, ocupado, pedirFisica, confirmarRecepcion }: {
+  tarjeta: Esquema['MiTarjetaJson']
+  ultimoViaje?: EventoViajeEvento
+  aviso?: { tipo: 'ok' | 'error'; texto: string }
+  ocupado: boolean
+  pedirFisica: () => Promise<void>
+  confirmarRecepcion: () => Promise<void>
+}) {
+  // El saldo "cuenta" hasta el valor nuevo: así se nota que cambió en vivo (CA2, CA3).
+  const saldo = useNumeroAnimado(tarjeta.saldo)
   const estado = tarjeta.soporte?.estado
 
   return (
     <>
       <section className="tarjeta saldo">
         <span className="nota">Saldo</span>
-        <strong className="cifra">{enPesos(tarjeta.saldo)}</strong>
-        <Link to="/recargar" className="boton principal">Recargar</Link>
+        <strong className="cifra">{enPesos(saldo)}</strong>
+        <Link to="/recargar" className="boton principal con-icono"><Plus aria-hidden="true" />Recargar</Link>
       </section>
 
       <section className="tarjeta">
-        <h2>Tu tarjeta</h2>
+        <h2 className="con-icono"><CreditCard className="icono-principal" aria-hidden="true" />Tu tarjeta</h2>
         <p>{textoSoporte(tarjeta.soporte)}</p>
         {(!tarjeta.soporte || estado === 'Bloqueada') && (
           <button className="principal" onClick={() => void pedirFisica()} disabled={ocupado}>
@@ -76,7 +92,10 @@ export default function MiTarjeta() {
       </section>
 
       {ultimoViaje && (
-        <section className={`tarjeta ${ultimoViaje.resultado === 'Exitoso' ? 'exito-borde' : 'alarma'}`} role="status">
+        <section className={`tarjeta entra ${ultimoViaje.resultado === 'Exitoso' ? 'exito-borde' : 'alarma'}`} role="status">
+          {ultimoViaje.resultado === 'Exitoso'
+            ? <CircleCheck className="icono-exito icono-linea" aria-hidden="true" />
+            : <CircleX className="icono-alarma icono-linea" aria-hidden="true" />}
           <strong>{ultimoViaje.resultado === 'Exitoso' ? 'Pasaste' : 'No pasaste'}</strong> · {ultimoViaje.torniquete} ·{' '}
           {horaColombia(ultimoViaje.fecha)}
           <br />
