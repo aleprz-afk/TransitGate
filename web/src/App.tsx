@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, NavLink, Outlet, Route, Routes, useLocation } from 'react-router'
+import { CreditCard, History, LayoutDashboard, LogOut, Route as Ruta, Ticket, TrainFront, User, Wallet, type LucideIcon } from 'lucide-react'
 import Entrar from './paginas/Entrar'
 import Registro from './paginas/Registro'
 import MiTarjeta from './paginas/cliente/MiTarjeta'
@@ -72,19 +73,19 @@ function ConSesion({ rol }: { rol: 'cliente' | 'personal' }) {
   )
 }
 
-const enlaces = {
+const enlaces: Record<'cliente' | 'personal', [string, string, LucideIcon][]> = {
   cliente: [
-    ['/mi-tarjeta', 'Mi tarjeta'],
-    ['/recargar', 'Recargar'],
-    ['/viajes', 'Viajes'],
-    ['/recargas', 'Recargas'],
-    ['/perfil', 'Perfil'],
+    ['/mi-tarjeta', 'Mi tarjeta', CreditCard],
+    ['/recargar', 'Recargar', Wallet],
+    ['/viajes', 'Viajes', Ruta],
+    ['/recargas', 'Recargas', History],
+    ['/perfil', 'Perfil', User],
   ],
   personal: [
-    ['/panel', 'Panel'],
-    ['/taquilla', 'Taquilla'],
+    ['/panel', 'Panel', LayoutDashboard],
+    ['/taquilla', 'Taquilla', Ticket],
   ],
-} as const
+}
 
 function Marco({ rol }: { rol: 'cliente' | 'personal' }) {
   const { sesion, salir } = useSesion()
@@ -94,18 +95,20 @@ function Marco({ rol }: { rol: 'cliente' | 'personal' }) {
     <>
       <header className="encabezado">
         <div className="encabezado-fila">
-          <strong className="marca">TransitGate</strong>
+          <strong className="marca con-icono"><TrainFront className="icono-principal" aria-hidden="true" />TransitGate</strong>
           <span className="nota">
             {sesion?.nombre}
             {rol === 'personal' && conexion !== 'Conectado' && <span className="etiqueta aviso">{conexion}</span>}
           </span>
-          <button className="enlace" onClick={() => void salir()}>
+          <button className="enlace con-icono" onClick={() => void salir()}>
+            <LogOut aria-hidden="true" />
             Cerrar sesión
           </button>
         </div>
         <nav className="navegacion">
-          {enlaces[rol].map(([ruta, texto]) => (
-            <NavLink key={ruta} to={ruta}>
+          {enlaces[rol].map(([ruta, texto, Icono]) => (
+            <NavLink key={ruta} to={ruta} className="con-icono">
+              <Icono aria-hidden="true" />
               {texto}
             </NavLink>
           ))}

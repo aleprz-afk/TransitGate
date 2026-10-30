@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@microsoft/signalr": "^8.0.29",
+    "lucide-react": "^0.454.0",
     "openapi-fetch": "^0.17.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",

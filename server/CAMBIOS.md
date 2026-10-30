@@ -1,6 +1,6 @@
 # Cambios del servidor
 
-Responsable: Alex · Última actualización: 25 de octubre de 2026 · Todo está en `main` hasta el PR #23; en curso: `fix/lector-pn532-sin-bloqueo`. Los contratos están en `docs/`: Contrato de la API v1.5 y Contratos de integración v1.10
+Responsable: Alex · Última actualización: 30 de octubre de 2026 · Todo está en `main` hasta el PR #24; en curso: `feat/web-estilo`. Los contratos están en `docs/`: Contrato de la API v1.5 y Contratos de integración v1.10
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -128,6 +128,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - **Tipos:** `src/api/esquema.d.ts` se genera con `npm run tipos` (con la API arriba) y está en el repositorio. `src/api/cliente.ts` exporta `api`, un cliente tipado: `api.GET('/api/torniquetes')`, `api.POST('/api/alertas/{id}/apagar-alarma', { params: { path: { id } } })`. Los enteros (`intentoId`, `pasoId`) salen como `number`.
 - **La web ya cubre todo lo que tiene la API (16 de octubre):** las pantallas de la tabla de `web/README.md` están hechas y probadas con el guion completo, a 375 px. Las construí yo para llegar al H2; tú quedas como dueña: revisa el PR, cambia lo que quieras del diseño y toma la QA del MVP: RNF-31 en un celular real, RNF-33 en los navegadores, RNF-30 con 5 usuarios y RNF-32 (que cada mensaje se entienda).
 - **Cómo está armada:** `useSesion()` para la sesión, `useEvento('Nombre', e => …)` para escuchar el hub (una sola conexión mientras hay sesión) y `src/textos.ts` para pasar los códigos de la API a español claro. Detalles en `web/README.md`.
+- **Estilo nuevo (30 de octubre, para que lo revises):** paleta «índigo cálido» (fondo crema, índigo solo para acciones; verde, ámbar y rojo quedan para los estados), con contraste WCAG AA comprobado en claro y oscuro; iconos de `lucide-react` en el menú, los botones y los estados (en el celular, el icono va encima del texto para que quepan las cinco pestañas); y animaciones que muestran lo que pasa en vivo: el saldo cuenta hasta el valor nuevo, el brazo del torniquete gira con una barra de 10 s para la ventana del paso, la alerta de colado pulsa y hace vibrar el celular, y los intentos nuevos entran deslizándose. Todo respeta «reducir movimiento» del sistema. La lógica está en `src/movimiento.ts`; la ventana de 10 s está fija en `Panel.tsx` (la API no la envía).
 - **Pendientes de la web:** filtros por fecha del historial (RF-40) y la clasificación de alertas (RF-35), que van después del MVP; las pantallas de administración (RF-41 a RF-44), cuando la API las tenga.
 - **Sesión (Contrato §2):** `POST /api/auth/login { correo, password }` deja la cookie y responde `{ rol, nombre }`; `GET /api/auth/sesion` dice quién está al recargar (401 si nadie); `POST /api/auth/logout`. Sin sesión, toda ruta protegida responde 401 `SesionRequerida`, y con otro rol, 403 `SinPermiso`; la API nunca redirige. Tras 6 intentos fallidos responde 401 `LoginBloqueado` por 5 minutos. El correo y la contraseña del operador te los paso por privado (están en los secretos de usuario).
 - **Demo:** `npm run build` deja la web en `server/TransitGate.Api/wwwroot`, que no se sube al repositorio. La API la sirve en `http://<IP>:5000/` y devuelve `index.html` para cualquier ruta que no sea de la API, así funcionan las rutas de React Router al recargar. Si `wwwroot` no existía cuando arrancó la API, hay que reiniciarla.
@@ -287,6 +288,9 @@ Lo que sigue, en orden (17 de octubre). Lo pendiente de cada integrante está en
 | Los pines del PN532 no están soldados: al acercar la tarjeta el lector se cae (`ENODEV`, `ETIMEDOUT`) y no siempre alcanza a leerla | Antes del H2 (Karol) |
 
 ## Historial
+
+**30 de octubre (semana 3)**
+- Web: paleta «índigo cálido» con contraste AA en los dos modos (el botón de alarma ya no lleva texto blanco sobre el rojo claro del modo oscuro), iconos con `lucide-react` y animaciones con propósito (saldo, torniquete y ventana del paso, alerta, intentos nuevos), con respaldo para que el saldo quede en el valor real aunque el navegador pause la animación.
 
 **25 de octubre (semana 3)**
 - Lector PN532 por I2C en el firmware (`lector_pn532.py`), sin bloquear el bucle principal y con reintento si el lector falla. Probado con el módulo real; 17 pruebas en el PC contra un PN532 simulado.
