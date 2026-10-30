@@ -14,6 +14,10 @@ public sealed class ApiConBaseDeDatos : WebApplicationFactory<Program>, IAsyncLi
 {
     public const string CorreoOperador = "operador@prueba.test";
     public const string PasswordOperador = "operador-prueba";
+    public const string CorreoSeguridad = "seguridad@prueba.test";
+    public const string PasswordSeguridad = "seguridad-prueba";
+    public const string CorreoAdministrador = "admin@prueba.test";
+    public const string PasswordAdministrador = "admin-prueba";
 
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder("postgres:17").Build();
 
@@ -34,15 +38,25 @@ public sealed class ApiConBaseDeDatos : WebApplicationFactory<Program>, IAsyncLi
         builder.UseSetting("ConnectionStrings:TransitGate", CadenaConexion);
         builder.UseSetting("Semilla:Operador:Correo", CorreoOperador);
         builder.UseSetting("Semilla:Operador:Password", PasswordOperador);
+        builder.UseSetting("Semilla:Seguridad:Correo", CorreoSeguridad);
+        builder.UseSetting("Semilla:Seguridad:Password", PasswordSeguridad);
+        builder.UseSetting("Semilla:Administrador:Correo", CorreoAdministrador);
+        builder.UseSetting("Semilla:Administrador:Password", PasswordAdministrador);
     }
 
     /// <summary>Un navegador con su propia cookie de sesión.</summary>
     public HttpClient Navegador() => CreateClient(new WebApplicationFactoryClientOptions { HandleCookies = true });
 
-    public async Task<HttpClient> OperadorAsync()
+    public Task<HttpClient> OperadorAsync() => PersonalAsync(CorreoOperador, PasswordOperador);
+
+    public Task<HttpClient> SeguridadAsync() => PersonalAsync(CorreoSeguridad, PasswordSeguridad);
+
+    public Task<HttpClient> AdministradorAsync() => PersonalAsync(CorreoAdministrador, PasswordAdministrador);
+
+    private async Task<HttpClient> PersonalAsync(string correo, string password)
     {
         var navegador = Navegador();
-        var respuesta = await navegador.PostAsJsonAsync("/api/auth/login", new { correo = CorreoOperador, password = PasswordOperador });
+        var respuesta = await navegador.PostAsJsonAsync("/api/auth/login", new { correo, password });
         respuesta.EnsureSuccessStatusCode();
         return navegador;
     }

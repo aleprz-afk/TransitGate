@@ -1,6 +1,6 @@
 # Cambios del servidor
 
-Responsable: Alex · Última actualización: 30 de octubre de 2026 · Todo está en `main` hasta el PR #24; en curso: `feat/web-estilo`. Los contratos están en `docs/`: Contrato de la API v1.5 y Contratos de integración v1.10
+Responsable: Alex · Última actualización: 30 de octubre de 2026 · Todo está en `main` hasta el PR #25; en curso: `feat/roles-personal`. Los contratos están en `docs/`: Contrato de la API v1.6 y Contratos de integración v1.10
 
 Este documento resume lo que ya hace la API y lo que cada uno necesita saber para integrarse. Se actualiza con cada entrega; el historial está al final.
 
@@ -15,7 +15,8 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - El hub de SignalR `/hubs/eventos` envía `EstadoTorniquete` en vivo: estado, conexión del ESP32 y de la visión, y desincronización.
 - **Portal del cliente:** registro, inicio de sesión, solicitud de la tarjeta física, confirmación de la recepción, recargas con pago simulado, saldo e historiales (Contrato §2 a §5 y §9).
 - **Base de datos:** todo se guarda en PostgreSQL (Docker, en la misma laptop): **reiniciar la API ya no borra nada**. Solo el estado de cada torniquete vive en memoria y arranca en `Cerrado`. La API necesita Docker Desktop abierto y su cadena de conexión (ver "Base de datos" en `server/README.md`).
-- **Sesión:** el panel, la taquilla y el portal piden sesión (cookie de Identity); sin sesión, 401. Hay una cuenta semilla de operador y otra de administrador.
+- **Sesión:** el panel, la taquilla y el portal piden sesión (cookie de Identity); sin sesión, 401. Hay una cuenta semilla de operador, otra de seguridad y otra de administrador.
+- **Roles del personal (RF-06):** el Operador hace taquilla y ve el panel, pero no apaga la alarma (403); Seguridad ve el panel y apaga la alarma, pero no entra a la taquilla (403); el Administrador puede todo eso. La web muestra a cada uno solo lo suyo.
 - El ESP32 y la visión se identifican con la cabecera `X-Device-Key`. Por ahora en **modo tolerante**: no se rechaza nada, solo queda en el log.
 - **Web completa para el MVP:** portal del cliente (registro, mi tarjeta, recargar, viajes, recargas, perfil) y panel del personal (panel en vivo y taquilla), servidos por la API en `http://<IP>:5000/`. Pensada para el celular.
 - Los números del JSON se reciben solo como números: `"pasoIdAbierto": "5"` (entre comillas) responde 400.
@@ -23,7 +24,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - **Firmware del ESP32-CAM** (`firmware/esp32-cam/`, Arduino): transmite MJPEG en `http://<ip>:81/stream` (C3). Probado en la placa por WiFi: OV3660, VGA, 24,6 FPS.
 - **`sim-esp32`** (`tools/sim-esp32/`): simula la placa en el PC con el mismo código del firmware. Con la web y la API alcanza para demostrar el H2 sin hardware.
 - **Servicio de visión** (`vision/`, Python + YOLO + ByteTrack): detecta personas en el stream de la CAM, cuenta los cruces de la línea virtual y los reporta a la API con su latido (C4). Probado contra la API real; falta la prueba con personas en vista cenital.
-- Hay 218 pruebas automatizadas: 153 del servidor (dominio, casos de uso y 16 de integración contra un PostgreSQL de verdad), 33 del firmware y 32 de la visión.
+- Hay 228 pruebas automatizadas: 163 del servidor (dominio, casos de uso y 26 de integración contra un PostgreSQL de verdad), 33 del firmware y 32 de la visión.
 
 ## Decisiones
 
@@ -194,7 +195,9 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - `GET /api/torniquetes/{id}/intentos` devuelve los últimos 100 intentos, del más reciente al más antiguo: `[{ intentoId, resultado, motivo, fecha }]` (Contrato §8, RF-32). `resultado` es `Exitoso`, `Rechazado` o `Fraude`; `motivo` no viene en los exitosos. Todavía no acepta `desde` ni `hasta`.
 - `GET /api/alertas?estado=Abierta` devuelve `[{ alertaId, torniqueteId, estado, fecha }]`, las más recientes primero (RF-33); sin `estado` devuelve todas. Un estado que no sea `Abierta`, `Atendida` o `Resuelta` recibe 400.
 - `POST /api/alertas/{alertaId}/apagar-alarma` apaga la alarma: el torniquete vuelve a `Cerrado` y la alerta queda `Atendida` (HU-22 CA1). Para el MVP con eso basta; clasificarla y dejarla `Resuelta` (RF-35) va en la entrega final. Apagar una alarma ya apagada responde 200 sin hacer nada.
-- Estas rutas piden sesión del personal (Operador, Seguridad o Administrador); sin sesión responden 401 y con sesión de cliente, 403.
+- Estas rutas piden sesión del personal; sin sesión responden 401 y con sesión de cliente, 403.
+- **Cada rol hace solo lo suyo (30 de octubre, Contrato v1.6, para que lo revises):** ver el panel (torniquetes, intentos y alertas) es de los tres roles. Apagar la alarma es solo de Seguridad y Administrador: el Operador recibe 403 `SinPermiso` (RF-06 CA3, RF-34 CA2). La taquilla (solicitudes y modo registro) es solo de Operador y Administrador: Seguridad recibe 403. En la web, `puedeEntregarTarjetas` y `puedeApagarAlarma` de `src/sesion.tsx` deciden qué se ve: Seguridad no ve la pestaña Taquilla (y `/taquilla` lo lleva al panel), y el Operador ve la alerta de colado con el aviso "Avisa a Seguridad para apagarla" en lugar del botón. Las rutas y el JSON no cambian.
+- **Para la demo:** el Operador ya no apaga la alarma. En el guion, la alarma la apaga alguien con sesión de Seguridad (cuenta semilla nueva, `Semilla:Seguridad:Correo` y `Semilla:Seguridad:Password` en los secretos de usuario, ver `server/README.md`) o el Administrador.
 - El OpenAPI para generar los tipos TypeScript está en `http://<IP>:5000/openapi/v1.json`.
 
 ### Jeisy — revisión del módulo de cuentas (interfaz C7)
@@ -282,14 +285,14 @@ Lo que sigue, en orden (17 de octubre). Lo pendiente de cada integrante está en
 | No se revierte el débito si el brazo no abre (RF-46) | Semana 6 |
 | Quién apagó la alarma no queda registrado (HU-22 CA1 pide "con mi nombre"); la sesión ya existe | Semana 3 |
 | El desafío del celular es fijo | Fase 4 |
-| En la práctica hay un solo rol de personal: el Operador puede todo lo del panel (MVP §3.1), así que RF-06 CA3 (taquilla sin apagar alarmas) todavía no aplica | Entrega final |
-| No hay recuperación de contraseña (RF-04) ni administración de operadores (RF-42) | Después del MVP (Should) |
+| No hay recuperación de contraseña (RF-04) ni pantallas de administración: tarifa (RF-41), operadores (RF-42) y torniquetes (RF-43); las cuentas del personal existen solo como datos semilla | Después del MVP: RF-41 en la entrega final (Must); RF-04, RF-42 y RF-43 son Should |
 | La visión todavía no se ha medido con personas en vista cenital (RNF-07 a RNF-09), y no hay `sim-vision` para el guion sin hardware | Prueba del ángulo con la maqueta; `sim-vision` en la semana 3 |
 | Los pines del PN532 no están soldados: al acercar la tarjeta el lector se cae (`ENODEV`, `ETIMEDOUT`) y no siempre alcanza a leerla | Antes del H2 (Karol) |
 
 ## Historial
 
 **30 de octubre (semana 3)**
+- Roles del personal separados (RF-06): apagar la alarma es de Seguridad y Administrador (el Operador recibe 403, RF-06 CA3) y la taquilla es de Operador y Administrador (Seguridad recibe 403). La web muestra a cada rol solo su menú y sus botones. Cuenta semilla de Seguridad. Contrato de la API v1.6, MVP v1.3 e historias de usuario v1.3. 10 pruebas de integración nuevas.
 - Web: paleta «índigo cálido» con contraste AA en los dos modos (el botón de alarma ya no lleva texto blanco sobre el rojo claro del modo oscuro), iconos con `lucide-react` y animaciones con propósito (saldo, torniquete y ventana del paso, alerta, intentos nuevos), con respaldo para que el saldo quede en el valor real aunque el navegador pause la animación.
 
 **25 de octubre (semana 3)**

@@ -40,6 +40,73 @@ public class SesionYPermisosTests(ApiConBaseDeDatos api)
         Assert.Equal(HttpStatusCode.Forbidden, (await operador.GetAsync("/api/tarjetas/mi-tarjeta")).StatusCode);
     }
 
+    [Theory] // RF-06: los tres roles del personal ven el estado, los intentos y las alertas
+    [InlineData("Operador")]
+    [InlineData("Seguridad")]
+    [InlineData("Administrador")]
+    public async Task Todo_el_personal_ve_el_panel(string rol)
+    {
+        var personal = await Personal(rol);
+
+        Assert.Equal(HttpStatusCode.OK, (await personal.GetAsync("/api/torniquetes")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await personal.GetAsync("/api/torniquetes/tq_1/intentos")).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await personal.GetAsync("/api/alertas")).StatusCode);
+    }
+
+    [Fact] // RF-06 CA3, RF-34 CA2: el operador de taquilla no apaga la alarma
+    public async Task El_operador_no_puede_apagar_la_alarma()
+    {
+        var operador = await api.OperadorAsync();
+
+        var respuesta = await operador.PostAsync("/api/alertas/al_1/apagar-alarma", null);
+
+        Assert.Equal(HttpStatusCode.Forbidden, respuesta.StatusCode);
+        Assert.Equal("SinPermiso", (await respuesta.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
+    }
+
+    [Theory] // RF-06: Seguridad y Administrador sí pasan el permiso; la alerta no existe, así que 404 y no 403
+    [InlineData("Seguridad")]
+    [InlineData("Administrador")]
+    public async Task Seguridad_y_administrador_pueden_apagar_la_alarma(string rol)
+    {
+        var personal = await Personal(rol);
+
+        var respuesta = await personal.PostAsync("/api/alertas/al_999999/apagar-alarma", null);
+
+        Assert.Equal(HttpStatusCode.NotFound, respuesta.StatusCode);
+        Assert.Equal("AlertaNoEncontrada", (await respuesta.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
+    }
+
+    [Fact] // RF-06: Seguridad no entrega tarjetas en taquilla
+    public async Task Seguridad_no_entra_a_la_taquilla()
+    {
+        var seguridad = await api.SeguridadAsync();
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await seguridad.GetAsync("/api/tarjetas/solicitudes")).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden,
+            (await seguridad.PostAsJsonAsync("/api/torniquetes/tq_1/modo-registro", new { solicitudId = "s_1" })).StatusCode);
+    }
+
+    [Theory] // RF-06: Operador y Administrador entregan tarjetas
+    [InlineData("Operador")]
+    [InlineData("Administrador")]
+    public async Task Operador_y_administrador_entran_a_la_taquilla(string rol)
+    {
+        var personal = await Personal(rol);
+
+        Assert.Equal(HttpStatusCode.OK, (await personal.GetAsync("/api/tarjetas/solicitudes")).StatusCode);
+    }
+
+    [Fact] // RF-02 CA1: el inicio de sesión dice el rol, para que la web arme el menú
+    public async Task La_sesion_devuelve_el_rol_de_seguridad()
+    {
+        var seguridad = await api.SeguridadAsync();
+
+        var sesion = await seguridad.GetFromJsonAsync<JsonElement>("/api/auth/sesion");
+
+        Assert.Equal("Seguridad", sesion.GetProperty("rol").GetString());
+    }
+
     [Fact] // RF-01 CA1, RF-06 CA1: cada cliente ve solo su tarjeta
     public async Task Cada_cliente_ve_su_propia_tarjeta()
     {
@@ -101,4 +168,11 @@ public class SesionYPermisosTests(ApiConBaseDeDatos api)
         Assert.Equal(HttpStatusCode.BadRequest, respuesta.StatusCode);
         Assert.Equal("CorreoDuplicado", (await respuesta.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("error").GetString());
     }
+
+    private Task<HttpClient> Personal(string rol) => rol switch
+    {
+        "Operador" => api.OperadorAsync(),
+        "Seguridad" => api.SeguridadAsync(),
+        _ => api.AdministradorAsync(),
+    };
 }

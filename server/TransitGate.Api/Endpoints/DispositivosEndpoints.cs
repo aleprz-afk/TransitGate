@@ -40,7 +40,8 @@ public static partial class DispositivosEndpoints
         monitoreo.MapGet("/alertas", ListarAlertas)
             .WithSummary("Alertas de colado, opcionalmente por estado: ?estado=Abierta (RF-33)");
         monitoreo.MapPost("/alertas/{id}/apagar-alarma", ApagarAlarma)
-            .WithSummary("Apaga la alarma y deja la alerta Atendida (RF-34)");
+            .RequireAuthorization(Politicas.Seguridad)
+            .WithSummary("Apaga la alarma y deja la alerta Atendida; solo Seguridad y Administrador (RF-34, RF-06 CA3)");
 
         return app;
     }

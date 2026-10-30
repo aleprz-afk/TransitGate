@@ -1,6 +1,8 @@
-# TransitGate — Historias de usuario (v1.2)
+# TransitGate — Historias de usuario (v1.3)
 
 Oct 10, 2026 · @alex
+
+**Cambios en v1.3 (30 oct 2026):** HU-22 — el criterio del operador de taquilla que no apaga la alarma ya aplica en el MVP (RF-06 CA3).
 
 **Cambios en v1.2 (14 oct 2026):** HU-22 CA1 — en el MVP la alerta también queda Atendida al apagar la alarma; lo que se deja para después es clasificarla.
 
@@ -264,7 +266,7 @@ Trazabilidad: RF-26, RF-28, RF-33 · RNF-06, RNF-07, RNF-08, RNF-26
 Como personal de seguridad, quiero apagar la sirena desde el panel, para devolver el torniquete a operación sin ir hasta él.
 
 - Dado un torniquete en Alarma, cuando pulso "Apagar alarma", entonces la sirena se apaga, el torniquete vuelve a Cerrado y la alerta queda Atendida con mi nombre y la hora. En el MVP no hace falta clasificarla después; clasificarla y dejarla Resuelta (HU-23) va en la semana 6. Quién la atendió se registra cuando exista Identity.
-- (Después del MVP; en el MVP un solo rol, Operador, hace taquilla y seguridad) Dado un operador de taquilla, cuando intenta apagarla, entonces no se le permite.
+- Dado un operador de taquilla, cuando intenta apagarla, entonces no se le permite.
 
 Trazabilidad: RF-34, RF-06 · RNF-04, RNF-23
 

@@ -3,6 +3,7 @@ import { BellOff, CircleCheck, CircleX, ShieldAlert, TriangleAlert } from 'lucid
 import { api, type AlertaResumen, type IntentoResumen } from '../../api/cliente'
 import type { EstadoTorniqueteEvento } from '../../api/eventos'
 import { vibrarAlarma } from '../../movimiento'
+import { puedeApagarAlarma, useSesion } from '../../sesion'
 import { horaColombia, textoEstadoTorniquete, textoMotivo } from '../../textos'
 import { useEvento } from '../../tiempoReal'
 
@@ -52,6 +53,8 @@ export default function Panel() {
   const [alertas, setAlertas] = useState<AlertaResumen[]>([])
   const [intentos, setIntentos] = useState<Intento[]>([])
   const [apagando, setApagando] = useState<string>()
+  const { sesion } = useSesion()
+  const puedeApagar = puedeApagarAlarma(sesion)
 
   async function cargarAlertas() {
     const { data } = await api.GET('/api/alertas', { params: { query: { estado: 'Abierta' } } })
@@ -102,10 +105,15 @@ export default function Panel() {
             <br />
             <span>Desde las {horaColombia(a.fecha)}</span>
           </div>
-          <button className="peligro con-icono" onClick={() => void apagarAlarma(a.alertaId)} disabled={apagando === a.alertaId}>
-            <BellOff aria-hidden="true" />
-            {apagando === a.alertaId ? 'Apagando…' : 'Apagar alarma'}
-          </button>
+          {puedeApagar ? (
+            <button className="peligro con-icono" onClick={() => void apagarAlarma(a.alertaId)} disabled={apagando === a.alertaId}>
+              <BellOff aria-hidden="true" />
+              {apagando === a.alertaId ? 'Apagando…' : 'Apagar alarma'}
+            </button>
+          ) : (
+            // RF-06 CA3: la taquilla ve la alerta pero no apaga la alarma.
+            <span className="nota">Avisa a Seguridad para apagarla</span>
+          )}
         </section>
       ))}
 

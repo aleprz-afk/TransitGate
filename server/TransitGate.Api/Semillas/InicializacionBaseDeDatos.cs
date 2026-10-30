@@ -27,6 +27,9 @@ public sealed class OpcionesSemilla
     public CuentaSemilla? Administrador { get; set; }
 
     public CuentaSemilla? Operador { get; set; }
+
+    /// <summary>Quien apaga la alarma en la demo: el Operador ya no puede (RF-06 CA3).</summary>
+    public CuentaSemilla? Seguridad { get; set; }
 }
 
 public static class InicializacionBaseDeDatos
@@ -55,6 +58,7 @@ public static class InicializacionBaseDeDatos
         var usuarios = servicios.GetRequiredService<UserManager<Usuario>>();
         await CrearPersonalAsync(usuarios, semilla.Administrador, Roles.Administrador, logger);
         await CrearPersonalAsync(usuarios, semilla.Operador, Roles.Operador, logger);
+        await CrearPersonalAsync(usuarios, semilla.Seguridad, Roles.Seguridad, logger);
 
         if (!await db.Clientes.AnyAsync())
         {

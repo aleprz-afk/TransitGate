@@ -1,8 +1,10 @@
-# TransitGate — Contrato de la API (v1.5)
+# TransitGate — Contrato de la API (v1.6)
 
 Rutas y formato JSON entre el ESP32 principal, el servicio de visión, la web/app y el servidor. Completa el pendiente de [`TransitGate_Arquitectura_del_sistema_v2.md`](./TransitGate_Arquitectura_del_sistema_v2.md) sección 9. Cubre los 46 RF de `Requisitos funcionales (v2)` y usa sus supuestos (S1–S15).
 
 El detalle de las interfaces que no son HTTP (APDU entre la app y el lector, stream de la cámara, pines, `config.json` y simuladores) está en [`TransitGate_Contratos_de_integracion.md`](./TransitGate_Contratos_de_integracion.md).
+
+**Cambios en v1.6 (30 oct 2026)** (permisos por rol, RF-06): cada rol del personal hace solo lo suyo (sección 8). `POST /api/alertas/{id}/apagar-alarma` es solo de `Seguridad` y `Administrador`: el `Operador` recibe 403 `SinPermiso` (RF-06 CA3, RF-34 CA2). La taquilla (`GET /api/tarjetas/solicitudes` y `POST /api/torniquetes/{id}/modo-registro`) es solo de `Operador` y `Administrador`: `Seguridad` recibe 403. Las rutas y el JSON no cambian.
 
 **Cambios en v1.5 (25 oct 2026)** (instante del cruce): `horaFotograma` es el instante en que la persona tocó la línea, interpolado entre las llegadas de las dos fotos en que cruzó (sección 7). El formato, las rutas y las respuestas no cambian.
 
@@ -339,7 +341,13 @@ POST /api/torniquetes/{id}/vision/latido                     (cada 5 s; fuera de
 
 ## 8. Monitoreo y operación (RF-31 a RF-38)
 
-Requiere sesión de rol `Operador`, `Seguridad` o `Administrador`, salvo donde se indique. En el MVP los tres roles pueden todo lo de esta sección (MVP §3.1).
+Requiere sesión de rol `Operador`, `Seguridad` o `Administrador`, salvo donde se indique. Con otro rol la respuesta es 403 `SinPermiso` (RF-06):
+
+| Ruta | Operador | Seguridad | Administrador |
+| --- | --- | --- | --- |
+| `GET /api/torniquetes`, `GET /api/torniquetes/{id}/intentos`, `GET /api/alertas` | Sí | Sí | Sí |
+| `POST /api/alertas/{id}/apagar-alarma`, `PATCH /api/alertas/{id}` | No | Sí | Sí |
+| `GET /api/tarjetas/solicitudes`, `POST /api/torniquetes/{id}/modo-registro` (§4) | Sí | No | Sí |
 
 ```
 GET /api/torniquetes
@@ -362,6 +370,7 @@ GET /api/alertas?estado=Abierta
 ```
 POST  /api/alertas/{id}/apagar-alarma          → 200                                          (RF-34)
                                                → 404 { "error": "AlertaNoEncontrada", "mensaje": "…" }
+                                               → 403 { "error": "SinPermiso", … }  (Operador, RF-06 CA3)
 PATCH /api/alertas/{id}
 { "estado": "Resuelta", "clasificacion": "FraudeConfirmado", "notas": "…" }
 → 200                                                                                          (RF-35)

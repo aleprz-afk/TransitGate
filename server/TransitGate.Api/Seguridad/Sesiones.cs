@@ -10,8 +10,14 @@ public static class Politicas
 {
     public const string Cliente = "Cliente";
 
-    /// <summary>En el MVP hay un solo rol de personal que hace taquilla y seguridad (MVP §3.1).</summary>
+    /// <summary>Ver el estado, los intentos y las alertas: todo el personal (RF-06).</summary>
     public const string Personal = "Personal";
+
+    /// <summary>Entregar tarjetas físicas en taquilla: Operador y Administrador (RF-06).</summary>
+    public const string Taquilla = "Taquilla";
+
+    /// <summary>Apagar la alarma: Seguridad y Administrador; el Operador de taquilla no (RF-06 CA3, RF-34 CA2).</summary>
+    public const string Seguridad = "Seguridad";
 }
 
 public static class Sesiones
@@ -36,7 +42,9 @@ public static class Sesiones
 
         services.AddAuthorizationBuilder()
             .AddPolicy(Politicas.Cliente, p => p.RequireRole(Roles.Cliente))
-            .AddPolicy(Politicas.Personal, p => p.RequireRole(Roles.Operador, Roles.Seguridad, Roles.Administrador));
+            .AddPolicy(Politicas.Personal, p => p.RequireRole(Roles.Operador, Roles.Seguridad, Roles.Administrador))
+            .AddPolicy(Politicas.Taquilla, p => p.RequireRole(Roles.Operador, Roles.Administrador))
+            .AddPolicy(Politicas.Seguridad, p => p.RequireRole(Roles.Seguridad, Roles.Administrador));
 
         return services;
     }

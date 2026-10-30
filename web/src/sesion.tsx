@@ -35,3 +35,13 @@ export function useSesion() {
 
 export const esPersonal = (sesion: Sesion | null | undefined) =>
   sesion?.rol === 'Operador' || sesion?.rol === 'Seguridad' || sesion?.rol === 'Administrador'
+
+// Lo que puede hacer cada rol del personal (RF-06). La API lo vuelve a comprobar y responde 403 `SinPermiso`.
+
+/** Entregar tarjetas físicas en taquilla: Operador y Administrador. */
+export const puedeEntregarTarjetas = (sesion: Sesion | null | undefined) =>
+  sesion?.rol === 'Operador' || sesion?.rol === 'Administrador'
+
+/** Apagar la alarma: Seguridad y Administrador; el Operador de taquilla no (RF-06 CA3, RF-34 CA2). */
+export const puedeApagarAlarma = (sesion: Sesion | null | undefined) =>
+  sesion?.rol === 'Seguridad' || sesion?.rol === 'Administrador'

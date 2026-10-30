@@ -16,6 +16,8 @@ dotnet user-secrets set "Semilla:Operador:Correo" "operador@transitgate.test" --
 dotnet user-secrets set "Semilla:Operador:Password" "<al menos 8 caracteres>" --project server/TransitGate.Api
 dotnet user-secrets set "Semilla:Administrador:Correo" "admin@transitgate.test" --project server/TransitGate.Api
 dotnet user-secrets set "Semilla:Administrador:Password" "<al menos 8 caracteres>" --project server/TransitGate.Api
+dotnet user-secrets set "Semilla:Seguridad:Correo" "seguridad@transitgate.test" --project server/TransitGate.Api
+dotnet user-secrets set "Semilla:Seguridad:Password" "<al menos 8 caracteres>" --project server/TransitGate.Api
 ```
 
 Al arrancar, la API aplica las migraciones, crea los roles y las cuentas del personal que falten y, si la base no tiene clientes, carga los de prueba. Sin la cadena de conexión, la API no arranca y dice qué falta.
