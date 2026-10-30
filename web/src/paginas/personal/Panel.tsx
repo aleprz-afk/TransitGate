@@ -5,7 +5,7 @@ import type { EstadoTorniqueteEvento } from '../../api/eventos'
 import { vibrarAlarma } from '../../movimiento'
 import { puedeApagarAlarma, useSesion } from '../../sesion'
 import { horaColombia, textoEstadoTorniquete, textoMotivo } from '../../textos'
-import { useEvento } from '../../tiempoReal'
+import { useEstadosTorniquetes, useEvento } from '../../tiempoReal'
 
 interface Intento extends IntentoResumen {
   torniqueteId: string
@@ -49,7 +49,8 @@ function BarraVentana({ desde }: { desde: string }) {
  */
 export default function Panel() {
   const [nombres, setNombres] = useState<Record<string, string>>({})
-  const [estados, setEstados] = useState<Record<string, EstadoTorniqueteEvento>>({})
+  const estadosConocidos = useEstadosTorniquetes()
+  const [estados, setEstados] = useState<Record<string, EstadoTorniqueteEvento>>(estadosConocidos)
   const [alertas, setAlertas] = useState<AlertaResumen[]>([])
   const [intentos, setIntentos] = useState<Intento[]>([])
   const [apagando, setApagando] = useState<string>()
@@ -62,7 +63,8 @@ export default function Panel() {
   }
 
   useEffect(() => {
-    // Carga inicial; después todo llega en vivo. El estado de cada torniquete lo manda el hub al conectarse.
+    // Carga inicial; después todo llega en vivo. El estado de cada torniquete lo manda el hub al conectarse
+    // (y si la conexión ya estaba abierta, sale del último que guardó tiempoReal).
     void (async () => {
       const { data: torniquetes } = await api.GET('/api/torniquetes')
       if (!torniquetes) return

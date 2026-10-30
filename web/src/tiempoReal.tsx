@@ -1,6 +1,6 @@
 import * as signalR from '@microsoft/signalr'
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react'
-import { nombresEventos, type Eventos } from './api/eventos'
+import { nombresEventos, type EstadoTorniqueteEvento, type Eventos } from './api/eventos'
 
 // Una sola conexión al hub mientras hay sesión (el hub pide la cookie). La API pone al personal en el grupo
 // "operacion" y a cada cliente en el suyo; aquí solo se reparte cada evento a las páginas que lo escuchan.
@@ -12,13 +12,18 @@ type Manejador = (contenido: never) => void
 interface ContextoTiempoReal {
   estado: EstadoConexion
   suscribir: (evento: keyof Eventos, manejador: Manejador) => () => void
+  /** El último EstadoTorniquete de cada torniquete recibido por esta conexión. */
+  estadosTorniquetes: () => Record<string, EstadoTorniqueteEvento>
 }
 
-const Contexto = createContext<ContextoTiempoReal>({ estado: 'Desconectado', suscribir: () => () => {} })
+const Contexto = createContext<ContextoTiempoReal>({ estado: 'Desconectado', suscribir: () => () => {}, estadosTorniquetes: () => ({}) })
 
 export function TiempoReal({ children }: { children: ReactNode }) {
   const [estado, setEstado] = useState<EstadoConexion>('Conectando')
   const manejadores = useRef(new Map<keyof Eventos, Set<Manejador>>())
+  // El hub manda el estado de cada torniquete solo al conectarse y cuando cambia: se guarda el último para
+  // que una página que se monta después (volver de Taquilla al Panel) no se quede esperando el próximo cambio.
+  const estados = useRef<Record<string, EstadoTorniqueteEvento>>({})
 
   useEffect(() => {
     const conexion = new signalR.HubConnectionBuilder()
@@ -27,6 +32,9 @@ export function TiempoReal({ children }: { children: ReactNode }) {
       .configureLogging(signalR.LogLevel.Warning)
       .build()
 
+    conexion.on('EstadoTorniquete', (e: EstadoTorniqueteEvento) => {
+      estados.current = { ...estados.current, [e.torniqueteId]: e }
+    })
     for (const nombre of nombresEventos) {
       conexion.on(nombre, (contenido: never) => {
         manejadores.current.get(nombre)?.forEach((manejador) => manejador(contenido))
@@ -60,7 +68,9 @@ export function TiempoReal({ children }: { children: ReactNode }) {
     return () => void lista.delete(manejador)
   }, [])
 
-  return <Contexto.Provider value={{ estado, suscribir }}>{children}</Contexto.Provider>
+  const estadosTorniquetes = useCallback(() => estados.current, [])
+
+  return <Contexto.Provider value={{ estado, suscribir, estadosTorniquetes }}>{children}</Contexto.Provider>
 }
 
 /** Ejecuta `manejador` con cada evento `evento` del hub mientras el componente esté montado. */
@@ -71,6 +81,11 @@ export function useEvento<E extends keyof Eventos>(evento: E, manejador: (conten
     ultimo.current = manejador
   })
   useEffect(() => suscribir(evento, ((contenido: Eventos[E]) => ultimo.current(contenido)) as Manejador), [evento, suscribir])
+}
+
+/** El último estado conocido de cada torniquete, para empezar con él al montar la página. */
+export function useEstadosTorniquetes() {
+  return useContext(Contexto).estadosTorniquetes
 }
 
 export function useEstadoConexion() {

@@ -197,6 +197,7 @@ Este documento resume lo que ya hace la API y lo que cada uno necesita saber par
 - `POST /api/alertas/{alertaId}/apagar-alarma` apaga la alarma: el torniquete vuelve a `Cerrado` y la alerta queda `Atendida` (HU-22 CA1). Para el MVP con eso basta; clasificarla y dejarla `Resuelta` (RF-35) va en la entrega final. Apagar una alarma ya apagada responde 200 sin hacer nada.
 - Estas rutas piden sesión del personal; sin sesión responden 401 y con sesión de cliente, 403.
 - **Cada rol hace solo lo suyo (30 de octubre, Contrato v1.6, para que lo revises):** ver el panel (torniquetes, intentos y alertas) es de los tres roles. Apagar la alarma es solo de Seguridad y Administrador: el Operador recibe 403 `SinPermiso` (RF-06 CA3, RF-34 CA2). La taquilla (solicitudes y modo registro) es solo de Operador y Administrador: Seguridad recibe 403. En la web, `puedeEntregarTarjetas` y `puedeApagarAlarma` de `src/sesion.tsx` deciden qué se ve: Seguridad no ve la pestaña Taquilla (y `/taquilla` lo lleva al panel), y el Operador ve la alerta de colado con el aviso "Avisa a Seguridad para apagarla" en lugar del botón. Las rutas y el JSON no cambian.
+- **El Panel ya no se queda en "Esperando el estado de los torniquetes…" (30 de octubre):** el hub manda `EstadoTorniquete` solo al conectarse y cuando algo cambia, y el Panel perdía ese primer envío al volver desde Taquilla (la conexión sigue abierta, pero la página se monta de nuevo). Ahora `tiempoReal.tsx` guarda el último estado de cada torniquete y el Panel arranca con él (`useEstadosTorniquetes()`).
 - **Para la demo:** el Operador ya no apaga la alarma. En el guion, la alarma la apaga alguien con sesión de Seguridad (cuenta semilla nueva, `Semilla:Seguridad:Correo` y `Semilla:Seguridad:Password` en los secretos de usuario, ver `server/README.md`) o el Administrador.
 - El OpenAPI para generar los tipos TypeScript está en `http://<IP>:5000/openapi/v1.json`.
 
@@ -293,6 +294,7 @@ Lo que sigue, en orden (17 de octubre). Lo pendiente de cada integrante está en
 
 **30 de octubre (semana 3)**
 - Roles del personal separados (RF-06): apagar la alarma es de Seguridad y Administrador (el Operador recibe 403, RF-06 CA3) y la taquilla es de Operador y Administrador (Seguridad recibe 403). La web muestra a cada rol solo su menú y sus botones. Cuenta semilla de Seguridad. Contrato de la API v1.6, MVP v1.3 e historias de usuario v1.3. 10 pruebas de integración nuevas.
+- Web: el Panel muestra el torniquete enseguida al volver desde Taquilla; antes se quedaba en "Esperando el estado…" hasta el siguiente cambio.
 - Web: paleta «índigo cálido» con contraste AA en los dos modos (el botón de alarma ya no lleva texto blanco sobre el rojo claro del modo oscuro), iconos con `lucide-react` y animaciones con propósito (saldo, torniquete y ventana del paso, alerta, intentos nuevos), con respaldo para que el saldo quede en el valor real aunque el navegador pause la animación.
 
 **25 de octubre (semana 3)**
