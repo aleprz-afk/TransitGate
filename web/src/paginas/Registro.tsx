@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router'
 import { api, codigoDe, mensajeDe } from '../api/cliente'
+import { Logo } from '../marca'
 import { useSesion } from '../sesion'
 
 type Campo = 'nombreCompleto' | 'tipoDocumento' | 'numeroDocumento' | 'correo' | 'telefono' | 'password' | 'autoriza'
@@ -61,8 +62,8 @@ export default function Registro() {
 
   return (
     <>
-      <h1 className="marca">TransitGate</h1>
       <form className="formulario tarjeta" onSubmit={enviar} noValidate>
+        <h1 className="marca con-icono"><Logo />TransitGate</h1>
         <h2>Crea tu cuenta</h2>
         <label>
           Nombre completo
@@ -113,10 +114,10 @@ export default function Registro() {
         <button type="submit" className="principal" disabled={enviando}>
           {enviando ? 'Creando…' : 'Crear cuenta'}
         </button>
+        <p className="nota centrado">
+          ¿Ya tienes cuenta? <Link to="/entrar">Inicia sesión</Link>
+        </p>
       </form>
-      <p className="nota centrado">
-        ¿Ya tienes cuenta? <Link to="/entrar">Inicia sesión</Link>
-      </p>
     </>
   )
 }
