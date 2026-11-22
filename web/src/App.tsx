@@ -1,5 +1,5 @@
 import { BrowserRouter, Navigate, NavLink, Outlet, Route, Routes, useLocation } from 'react-router'
-import { CreditCard, History, LayoutDashboard, LogOut, Route as Ruta, Ticket, TrainFront, User, Wallet, type LucideIcon } from 'lucide-react'
+import { CreditCard, History, LayoutDashboard, LogOut, Route as Ruta, Ticket, User, Wallet, type LucideIcon } from 'lucide-react'
 import Entrar from './paginas/Entrar'
 import Registro from './paginas/Registro'
 import MiTarjeta from './paginas/cliente/MiTarjeta'
@@ -9,6 +9,7 @@ import { Recargas, Viajes } from './paginas/cliente/Historial'
 import Panel from './paginas/personal/Panel'
 import Taquilla from './paginas/personal/Taquilla'
 import type { Sesion } from './api/cliente'
+import { Logo, PlanoTrenes } from './marca'
 import { esPersonal, puedeEntregarTarjetas, SesionProvider, useSesion } from './sesion'
 import { TiempoReal, useEstadoConexion } from './tiempoReal'
 
@@ -56,7 +57,12 @@ function SinSesion({ children }: { children: React.ReactNode }) {
   const { sesion } = useSesion()
   if (sesion === undefined) return <Cargando />
   if (sesion) return <Navigate to="/" replace />
-  return <main className="contenido angosto">{children}</main>
+  return (
+    <>
+      <PlanoTrenes lugar="entrada" />
+      <main className="contenido angosto">{children}</main>
+    </>
+  )
 }
 
 function ConSesion({ rol }: { rol: 'cliente' | 'personal' }) {
@@ -103,9 +109,10 @@ function Marco({ rol }: { rol: 'cliente' | 'personal' }) {
 
   return (
     <>
+      <PlanoTrenes lugar={rol === 'personal' ? 'personal' : 'portal'} />
       <header className="encabezado">
         <div className="encabezado-fila">
-          <strong className="marca con-icono"><TrainFront className="icono-principal" aria-hidden="true" />TransitGate</strong>
+          <strong className="marca con-icono"><Logo />TransitGate</strong>
           <span className="nota">
             {sesion?.nombre}
             {rol === 'personal' && conexion !== 'Conectado' && <span className="etiqueta aviso">{conexion}</span>}

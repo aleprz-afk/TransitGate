@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router'
 import { api, mensajeDe } from '../api/cliente'
+import { Logo } from '../marca'
 import { esPersonal, useSesion } from '../sesion'
 
 /** RF-02: el mismo inicio de sesión para clientes y personal; cada uno llega a su pantalla. */
@@ -28,8 +29,8 @@ export default function Entrar() {
 
   return (
     <>
-      <h1 className="marca">TransitGate</h1>
       <form className="formulario tarjeta" onSubmit={enviar}>
+        <h1 className="marca con-icono"><Logo />TransitGate</h1>
         <h2>Iniciar sesión</h2>
         <label>
           Correo
@@ -43,10 +44,10 @@ export default function Entrar() {
         <button type="submit" className="principal" disabled={enviando}>
           {enviando ? 'Entrando…' : 'Entrar'}
         </button>
+        <p className="nota centrado">
+          ¿Primera vez? <Link to="/registro">Crea tu cuenta</Link>
+        </p>
       </form>
-      <p className="nota centrado">
-        ¿Primera vez? <Link to="/registro">Crea tu cuenta</Link>
-      </p>
     </>
   )
 }

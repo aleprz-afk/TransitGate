@@ -1,17 +1,18 @@
 /*
  * Estilos del portal y del panel: primero el celular de 360 px (RNF-31), con modo oscuro.
- * Paleta «índigo cálido»: el índigo es solo para acciones; verde, ámbar y rojo quedan para los estados
- * (en línea, esperando el cruce, alarma). Todos los textos pasan WCAG AA (4,5:1) en los dos modos.
+ * Marca «atardecer llanero»: ciruela para las acciones y coral solo para el plano de trenes y el logo (no
+ * alcanza el contraste de un texto); verde, ámbar y rojo quedan para los estados (en línea, esperando el
+ * cruce, alarma). Todos los textos pasan WCAG AA (4,5:1) en los dos modos.
  */
 :root {
-  --texto: #1e2433;
-  --suave: #5a6072;
-  --fondo: #f7f5f2;
+  --texto: #2a1a30;
+  --suave: #695a6e;
+  --fondo: #faf6f8;
   --tarjeta: #ffffff;
-  --borde: #e6e1d8;
-  --principal: #4a55c9;
+  --borde: #e6dce6;
+  --principal: #4a2459;
   --principal-texto: #ffffff;
-  --principal-fondo: #eceefb;
+  --principal-fondo: #f3eaf5;
   --alarma: #b4282f;
   --alarma-fondo: #fce8e8;
   --alarma-texto: #ffffff;
@@ -19,6 +20,9 @@
   --exito-fondo: #e2f2e8;
   --activo: #8a5300;
   --activo-fondo: #fbefd9;
+  --via-1: #f0703a;
+  --via-2: #f5a27c;
+  --via-3: #d95a35;
   --radio: 12px;
 
   font: 16px/1.5 system-ui, 'Segoe UI', Roboto, sans-serif;
@@ -29,21 +33,24 @@
 
 @media (prefers-color-scheme: dark) {
   :root {
-    --texto: #e8eaf2;
-    --suave: #a2a8ba;
-    --fondo: #14161f;
-    --tarjeta: #1c1f2b;
-    --borde: #2e3242;
-    --principal: #9aa3ff;
-    --principal-texto: #14161f;
-    --principal-fondo: #262a45;
+    --texto: #f2e9f3;
+    --suave: #b5a6ba;
+    --fondo: #1a1220;
+    --tarjeta: #241a2b;
+    --borde: #423149;
+    --principal: #d9b3e6;
+    --principal-texto: #1a1220;
+    --principal-fondo: #3a2545;
     --alarma: #ff8f8a;
     --alarma-fondo: #3a1719;
-    --alarma-texto: #14161f;
+    --alarma-texto: #1a1220;
     --exito: #6fd39b;
     --exito-fondo: #15291f;
     --activo: #f2bb63;
     --activo-fondo: #2c2312;
+    --via-1: #f0703a;
+    --via-2: #b85a38;
+    --via-3: #ff9a6b;
   }
 }
 
@@ -54,6 +61,11 @@
 body {
   margin: 0;
   background: var(--fondo);
+}
+
+/* Contexto propio para que el plano (z-index -1) quede sobre el fondo y debajo del contenido. */
+#root {
+  isolation: isolate;
 }
 
 h1 {
@@ -106,9 +118,10 @@ a {
 }
 
 h1.marca {
-  text-align: center;
+  justify-content: center;
   font-size: 1.6rem;
-  margin: 32px 0 16px;
+  margin: 8px 0;
+  color: var(--principal);
 }
 
 .navegacion {
@@ -142,7 +155,67 @@ h1.marca {
 
 .contenido.angosto {
   max-width: 440px;
+  padding-top: clamp(16px, 8vh, 72px);
 }
+
+/* Marca: logo y plano de trenes de fondo (marca.tsx) */
+
+.con-icono .logo {
+  width: 1.5em;
+  height: 1.5em;
+}
+
+.logo path,
+.logo circle {
+  fill: none;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.logo .logo-arco { stroke: var(--principal); }
+.logo .logo-via { stroke: var(--via-1); }
+
+.logo .logo-estacion {
+  fill: var(--principal);
+  stroke: var(--via-1);
+  stroke-width: 3;
+}
+
+.plano {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Detrás de textos sueltos va muy tenue, para no bajar de WCAG AA. */
+.plano.entrada .via { opacity: 0.55; }
+.plano.portal { opacity: 0.14; }
+.plano.personal { opacity: 0.1; }
+
+/* Con una alarma, solo el rojo llama la atención. */
+#root:has(.tarjeta.alarma) .plano { display: none; }
+
+.plano .via {
+  fill: none;
+  stroke-width: 10;
+  stroke-linejoin: round;
+}
+
+.plano .via-1 { stroke: var(--via-1); }
+.plano .via-2 { stroke: var(--via-2); }
+.plano .via-3 { stroke: var(--via-3); }
+
+.plano .estacion {
+  fill: var(--fondo);
+  stroke: var(--principal);
+  stroke-width: 4;
+}
+
+.plano .vagon { fill: var(--principal); }
+.plano .ventana { fill: var(--fondo); }
 
 /* Bloques */
 
