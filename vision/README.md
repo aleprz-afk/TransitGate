@@ -19,7 +19,7 @@ Lee el MJPEG del ESP32-CAM (C3), detecta personas con YOLO preentrenado (clase `
 - `stream.py`: lee el MJPEG con un socket propio, en un hilo, y se queda solo con el último cuadro. No usa `cv2.VideoCapture`: su lector HTTP se atascaba con la ESP32 (huecos de más de 1 s y caídas a 2 FPS que la cámara no tenía) y al cortarse podía bloquearse ~30 s. Sin datos en 3 s, reconecta.
 - `conteo.py`: el conteo de cruces sin cámara ni red. Cada persona tiene un lado confirmado de la línea; alrededor de la línea hay una franja (`margen_linea`) donde no cambia nada, así que el temblor del recuadro encima de la línea no cuenta dobles. Cada `trackId` se reporta una sola vez (RF-26 CA3). El cruce se confirma al salir de la franja, pero se reporta el instante en que el centro tocó la línea, interpolado entre las dos fotos en que cambió de lado (C4).
 - `api.py`: cruces y latido. Los cruces salen por una cola en otro hilo, con plazo de 1 s y hasta 3 reintentos con el mismo cuerpo (C4). Anota el retraso de cada cruce en `cruces.csv` para RNF-06.
-- `config.yaml`: configuración de C3 §4.1, con los valores de la red de la demo.
+- `config.yaml`: configuración de C3 §4.1, con los valores de la red de la demo. En `stream_url` (y `api_url`), `{red}` se cambia por los tres primeros números de la IP de la laptop: sirve con el hotspot del celular, que cambia de rango cada vez que se enciende.
 - `pruebas/`: pruebas del conteo y del cliente en el PC.
 
 ## Instalar

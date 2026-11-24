@@ -8,6 +8,7 @@
   "timeoutLecturaMs": 3000,
   "cierreSinConexionMs": 10000,
   "pines": { "sda": 21, "scl": 22, "servo": 13, "sirena": 26, "led": 2 },
+  "sirena": "rele",
   "lector": "simulado",
   "uidsPrueba": ["04A1B2C3", "DEADBEEF", "0BADCAFE", "5011C17A"]
 }
