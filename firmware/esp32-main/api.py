@@ -14,15 +14,32 @@ class SinRespuesta(Exception):
 
 class Api:
     def __init__(self, servidor, torniquete_id, clave):
-        # servidor: "http://192.168.137.10:5000"
+        # servidor: "http://192.168.137.10:5000", o "http://{red}.112:5000" si la red cambia de rango cada vez
+        # (el hotspot del celular): {red} son los tres primeros números de la IP de la ESP32 (ver usar_red).
         direccion = servidor.split("://", 1)[-1].rstrip("/")
         host, _, puerto = direccion.partition(":")
-        self._host = host
+        self._plantilla = host
+        self._host = None if "{red}" in host else host
         self._puerto = int(puerto or 80)
         self.torniquete_id = torniquete_id
         self._base = "/api/torniquetes/" + torniquete_id
         self._clave = clave
         self._direccion = None   # se resuelve una vez y se reusa
+
+    @property
+    def host(self):
+        return self._host
+
+    def usar_red(self, ip_propia):
+        """Arma el host de la API con la red actual si el servidor usa {red}. Devuelve True si cambió."""
+        if "{red}" not in self._plantilla or not ip_propia or ip_propia == "0.0.0.0":
+            return False
+        host = self._plantilla.replace("{red}", ".".join(ip_propia.split(".")[:3]))
+        if host == self._host:
+            return False
+        self._host = host
+        self._direccion = None
+        return True
 
     def latido(self, cuerpo, timeout_ms):
         return self._post(self._base + "/latido", cuerpo, timeout_ms)
@@ -38,6 +55,8 @@ class Api:
 
     def _post(self, ruta, cuerpo, timeout_ms):
         """Devuelve (estado HTTP, JSON). Lanza SinRespuesta si no hay respuesta completa dentro del plazo."""
+        if self._host is None:
+            raise SinRespuesta("todavía no se conoce la red para armar la IP de la API")
         datos = json.dumps(cuerpo).encode()
         peticion = (
             "POST %s HTTP/1.0\r\nHost: %s:%d\r\nContent-Type: application/json\r\n"

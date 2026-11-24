@@ -1,9 +1,9 @@
 # Configuración del servicio de visión (Contratos de integración §4.1).
 # Los valores son los de la red de la demo; para probar en otra red usa --api y --stream.
-api_url: "http://192.168.137.10:5000"
+api_url: "http://127.0.0.1:5000"           # la API corre en esta misma laptop
 torniquete_id: "tq_1"
 device_key_env: "TG_VISION_KEY"     # la clave va en variable de entorno, no aquí (RNF-25)
-stream_url: "http://192.168.137.21:81/stream"
+stream_url: "http://{red}.22:81/stream"     # {red}: la red actual del hotspot (servicio.py)
 modelo: "yolov8n.pt"                # preentrenado, clase person
 confianza_min: 0.5
 imgsz: 320                          # entrada de YOLO; 320 sin GPU (RNF-10)

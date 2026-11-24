@@ -4,7 +4,7 @@ import json
 import os
 import time
 
-from actuadores import Brazo, Led, Sirena
+from actuadores import Brazo, Led, Sirena, SirenaTono
 from api import Api, SinRespuesta
 from controlador import Controlador
 from red import Red
@@ -55,7 +55,8 @@ def main():
 
     # RF-45 CA3: brazo cerrado y sirena apagada antes de cualquier otra cosa.
     brazo = Brazo(pines["servo"])
-    sirena = Sirena(pines["sirena"])
+    # "tono": zumbador pasivo directo al pin; si no, salida fija hacia el relé o el transistor.
+    sirena = (SirenaTono if config.get("sirena") == "tono" else Sirena)(pines["sirena"])
     led = Led(pines["led"])
 
     controlador = Controlador(arranque, ahora_ms(), cierre_sin_conexion_ms=config["cierreSinConexionMs"])
@@ -65,9 +66,12 @@ def main():
     print("[inicio] TransitGate %s, arranque %s, torniquete %s" % (VERSION, arranque, config["torniqueteId"]))
 
     ultimo_latido = None
+    fallos_latido = 0   # seguidos; se avisa en el log al cuarto (~1 s) y al recuperarse, no en cada uno
     while True:
         ahora = ahora_ms()
         hay_red = red.revisar()
+        if hay_red and api.usar_red(red.ip()):
+            print("[red] API en " + api.host)
 
         uid = lector.leer()
         if uid:
@@ -83,10 +87,16 @@ def main():
                     estado, respuesta = api.latido(controlador.cuerpo_latido(VERSION), config["timeoutLatidoMs"])
                     if estado == 200:
                         controlador.latido_ok(respuesta, ahora_ms())
+                        if fallos_latido >= 4:
+                            print("[latido] responde de nuevo tras %d fallos" % fallos_latido)
+                        fallos_latido = 0
                     else:
                         print("[latido] HTTP %d %s" % (estado, respuesta))
-                except SinRespuesta:
-                    pass   # cuenta como fallo; a los 10 s sin ninguno, revisar() cierra el brazo
+                except SinRespuesta as error:
+                    # Cuenta como fallo; a los 10 s sin ninguno, revisar() cierra el brazo.
+                    fallos_latido += 1
+                    if fallos_latido == 4:
+                        print("[latido] sin respuesta (%s); el servidor marca fuera de línea a los 5 s" % error)
 
         if controlador.revisar(ahora_ms()):
             print("[conexion] 10 s sin latidos: brazo cerrado y sirena apagada (RF-25 CA2)")

@@ -24,7 +24,7 @@ Lee la tarjeta, la reporta a la API, manda un latido cada 300 ms y aplica lo que
 - `actuadores.py`: servo (PWM 50 Hz en GPIO 13), sirena (GPIO 26, por transistor o relé) y LED de la placa (GPIO 2: parpadea sin conexión, fijo en modo registro).
 - `lector_pn532.py`: el PN532 por I2C (SDA en GPIO 21, SCL en GPIO 22, dirección `0x24`; interruptores del módulo en I2C). Se usa con `"lector": "pn532"` en `config.json`. `leer()` no bloquea: manda la búsqueda de tarjeta y en cada vuelta solo pregunta si el PN532 ya respondió. Si el lector no aparece o se desconecta, el resto del firmware sigue y lo vuelve a iniciar cada 2 s (`[lector] PN532 …` en el log). El reinicio también va por pasos, sin `sleep`: solo el primer inicio, antes del bucle, espera las respuestas.
 - `lector_simulado.py`: para probar sin el PN532. El botón BOOT "acerca" la siguiente tarjeta de `uidsPrueba`, o se escribe un UID y Enter por el puerto serie.
-- `config.example.json`: copia como `config.json` y llénalo (red, IP de la laptop, clave del dispositivo). `config.json` no se sube al repositorio (RNF-25).
+- `config.example.json`: copia como `config.json` y llénalo (red, IP de la laptop, clave del dispositivo). `config.json` no se sube al repositorio (RNF-25). Si la red cambia de rango cada vez (el hotspot de un celular), pon `"servidor": "http://{red}.112:5000"`: `{red}` se cambia por los tres primeros números de la IP de la ESP32 al conectarse. `"sirena": "tono"` es para un zumbador pasivo conectado directo al pin; `"rele"` (o sin la opción) deja la salida fija para un relé o transistor.
 - `pruebas/`: pruebas del controlador en el PC.
 
 ## Programar la placa

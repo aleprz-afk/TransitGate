@@ -5,6 +5,7 @@ import type { EstadoTorniqueteEvento } from '../../api/eventos'
 import { vibrarAlarma } from '../../movimiento'
 import { puedeApagarAlarma, useSesion } from '../../sesion'
 import { horaColombia, textoEstadoTorniquete, textoMotivo } from '../../textos'
+import { useSirena } from '../../sirena'
 import { useEstadosTorniquetes, useEvento } from '../../tiempoReal'
 
 interface Intento extends IntentoResumen {
@@ -96,9 +97,20 @@ export default function Panel() {
   }
 
   const torniquetes = Object.values(estados).sort((a, b) => a.torniqueteId.localeCompare(b.torniqueteId))
+  const sirena = useSirena(alertas.length > 0)
 
   return (
     <>
+      {sirena.bloqueada && (
+        <section className="tarjeta alarma" role="alert">
+          <div className="fila-dato">
+            <span>El navegador silenció la alarma.</span>
+            <button className="peligro" onClick={sirena.activar}>
+              Activar sonido
+            </button>
+          </div>
+        </section>
+      )}
       {alertas.map((a) => (
         <section key={a.alertaId} className="tarjeta alarma alerta-colado" role="alert">
           <ShieldAlert className="icono-grande" aria-hidden="true" />

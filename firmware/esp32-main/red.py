@@ -13,9 +13,18 @@ class Red:
         self._password = password
         self._wlan = network.WLAN(network.STA_IF)
         self._wlan.active(True)
+        # Sin ahorro de energía: con él, la ESP32 solo escucha la red cada cierto tiempo y las respuestas de
+        # la API se demoran cientos de ms; el latido tiene 250 ms y fallaba a ratos ("fuera de línea" intermitente).
+        try:
+            self._wlan.config(pm=self._wlan.PM_NONE)
+        except (AttributeError, ValueError, OSError):
+            pass
         self._ultimo_intento = None
         self._conectada = False
         self.configurada = bool(ssid) and ssid != "POR_DEFINIR"
+
+    def ip(self):
+        return self._wlan.ifconfig()[0]
 
     def revisar(self):
         """Lanza la conexión si hace falta. Devuelve True si hay red."""

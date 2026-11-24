@@ -13,6 +13,7 @@ Teclas: q sale, r reinicia los contadores.
 """
 import argparse
 import os
+import socket
 import time
 
 import cv2
@@ -28,6 +29,24 @@ PERSONA = 0  # clase person de COCO
 AQUI = os.path.dirname(os.path.abspath(__file__))
 VENTANA = "TransitGate - vision"
 SIN_SENAL_SEG = 1.0
+
+
+def red_local():
+    """Los tres primeros números de la IP de esta laptop en la red con salida (la del hotspot).
+
+    No envía nada: conectar un socket UDP solo elige la interfaz por la que saldría el tráfico.
+    """
+    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    try:
+        s.connect(("8.8.8.8", 80))
+        return ".".join(s.getsockname()[0].split(".")[:3])
+    finally:
+        s.close()
+
+
+def con_red(url):
+    """Cambia {red} por la red actual: el hotspot del celular cambia de rango cada vez que se enciende."""
+    return url.replace("{red}", red_local()) if "{red}" in url else url
 
 
 def cargar_config(ruta):
@@ -76,8 +95,8 @@ def main():
     a = p.parse_args()
 
     c = cargar_config(a.config)
-    api_url = a.api or c["api_url"]
-    stream_url = a.stream or c["stream_url"]
+    api_url = con_red(a.api or c["api_url"])
+    stream_url = con_red(a.stream or c["stream_url"])
     sesion = nueva_sesion()
     print(f"[servicio] sesionVision {sesion}, torniquete {c['torniquete_id']}")
 

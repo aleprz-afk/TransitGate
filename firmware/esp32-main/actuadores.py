@@ -39,6 +39,37 @@ class Sirena:
         return self.encendida
 
 
+class SirenaTono:
+    """Zumbador pasivo directo al pin (sin relé): solo suena con una señal que oscila, no con corriente fija.
+
+    Alterna dos tonos para que suene como sirena. Se usa con "sirena": "tono" en config.json; el pin da
+    3,3 V y pocos mA, suficiente para un piezo pasivo (más bajo que a 12 V, pero se oye).
+    """
+
+    TONOS_HZ = (2000, 3000)
+    CAMBIO_MS = 400
+    VOLUMEN = 32768   # duty_u16 al 50 %: el máximo volumen de un piezo
+
+    def __init__(self, pin):
+        # Igual que el servo: el duty va después de crear el PWM.
+        self._pwm = PWM(Pin(pin), freq=self.TONOS_HZ[0])
+        self._pwm.duty_u16(0)
+        self._tono = 0
+        self.encendida = False
+
+    def poner(self, encendida):
+        if encendida != self.encendida:
+            self._pwm.duty_u16(self.VOLUMEN if encendida else 0)
+            self.encendida = encendida
+            print("[sirena] " + ("ENCENDIDA (tono)" if encendida else "apagada"))
+        if encendida:
+            tono = (ahora_ms() // self.CAMBIO_MS) % len(self.TONOS_HZ)
+            if tono != self._tono:
+                self._tono = tono
+                self._pwm.freq(self.TONOS_HZ[tono])
+        return self.encendida
+
+
 class Led:
     """LED de la placa (C8): parpadeo = sin conexión; fijo = modo registro; apagado = todo normal."""
 
